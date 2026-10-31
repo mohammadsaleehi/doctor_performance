@@ -41,6 +41,6 @@ final class DiagnosticsPage {
 	 * Render the diagnostics page.
 	 */
 	public function render(): void {
-		require WP_PERFORMANCE_DOCTOR_PLUGIN_PATH . '/admin/Views/diagnostics.php';
+		require \WPD_PERFORMANCE_DOCTOR_PLUGIN_PATH . '/admin/Views/diagnostics.php';
 	}
 }

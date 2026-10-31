@@ -41,6 +41,6 @@ final class DashboardPage {
 	 * Render the dashboard page.
 	 */
 	public function render(): void {
-		require WP_PERFORMANCE_DOCTOR_PLUGIN_PATH . '/admin/Views/dashboard.php';
+		require \WPD_PERFORMANCE_DOCTOR_PLUGIN_PATH . '/admin/Views/dashboard.php';
 	}
 }

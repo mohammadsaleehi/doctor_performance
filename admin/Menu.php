@@ -7,6 +7,10 @@
 
 namespace WPPerformanceDoctor\Admin;
 
+use WPPerformanceDoctor\Admin\Pages\DashboardPage;
+use WPPerformanceDoctor\Admin\Pages\DiagnosticsPage;
+use WPPerformanceDoctor\Admin\Pages\RecommendationsPage;
+use WPPerformanceDoctor\Admin\Pages\SettingsPage;
 use WPPerformanceDoctor\Security\CapabilityManager;
 
 /**

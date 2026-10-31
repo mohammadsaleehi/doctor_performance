@@ -10,7 +10,8 @@
         }
     ],
     "require": {
-        "php": ">=8.1"
+        "php": ">=8.1",
+        "psr/container": "^2.0"
     },
     "require-dev": {
         "wp-coding-standards/wpcs": "^3.0",
@@ -19,12 +20,14 @@
     },
     "autoload": {
         "psr-4": {
-            "WPPerformanceDoctor\\\\": "src/"
+            "WPPerformanceDoctor\\Admin\\": "admin/",
+            "WPPerformanceDoctor\\Admin\\Pages\\": "admin/Pages/",
+            "WPPerformanceDoctor\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "WPPerformanceDoctor\\\\Tests\\\\": "tests/"
+            "WPPerformanceDoctor\\Tests\\": "tests/"
         }
     },
     "scripts": {

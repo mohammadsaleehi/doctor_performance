@@ -55,16 +55,16 @@ final class Admin {
 	public function register_assets(): void {
 		wp_enqueue_style(
 			'wp-performance-doctor-admin',
-			plugin_dir_url( WP_PERFORMANCE_DOCTOR_PLUGIN_FILE ) . 'assets/css/admin.css',
+			plugin_dir_url( \WPD_PERFORMANCE_DOCTOR_PLUGIN_FILE ) . 'assets/css/admin.css',
 			array(),
-			WP_PERFORMANCE_DOCTOR_VERSION
+			\WPD_PERFORMANCE_DOCTOR_VERSION
 		);
 
 		wp_enqueue_script(
 			'wp-performance-doctor-admin',
-			plugin_dir_url( WP_PERFORMANCE_DOCTOR_PLUGIN_FILE ) . 'assets/js/admin.js',
+			plugin_dir_url( \WPD_PERFORMANCE_DOCTOR_PLUGIN_FILE ) . 'assets/js/admin.js',
 			array(),
-			WP_PERFORMANCE_DOCTOR_VERSION,
+			\WPD_PERFORMANCE_DOCTOR_VERSION,
 			true
 		);
 	}

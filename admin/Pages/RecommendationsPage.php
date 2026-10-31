@@ -41,6 +41,6 @@ final class RecommendationsPage {
 	 * Render the recommendations page.
 	 */
 	public function render(): void {
-		require WP_PERFORMANCE_DOCTOR_PLUGIN_PATH . '/admin/Views/recommendations.php';
+		require \WPD_PERFORMANCE_DOCTOR_PLUGIN_PATH . '/admin/Views/recommendations.php';
 	}
 }

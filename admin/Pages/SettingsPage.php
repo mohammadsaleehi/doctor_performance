@@ -41,6 +41,6 @@ final class SettingsPage {
 	 * Render the settings page.
 	 */
 	public function render(): void {
-		require WP_PERFORMANCE_DOCTOR_PLUGIN_PATH . '/admin/Views/settings.php';
+		require \WPD_PERFORMANCE_DOCTOR_PLUGIN_PATH . '/admin/Views/settings.php';
 	}
 }
