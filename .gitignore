@@ -1,0 +1,33 @@
+# Compiled dependencies
+/vendor/
+
+# PHPUnit
+/.phpunit.result.cache
+/wp-performance-doctor/.phpunit.result.cache
+
+# PHPStan
+/wp-performance-doctor/.phpstan/
+
+# Composer cache
+/.composer/cache
+
+# IDE
+.idea/
+.vscode/
+*.phpstorm
+*.sublime-project
+*.sublime-workspace
+
+# Local environment
+.env
+.env.local
+wp-config.php
+
+# OS generated
+.DS_Store
+Thumbs.db
+
+# Temporary
+*.tmp
+*.log
+/tmp/

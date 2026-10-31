@@ -1,0 +1,10 @@
+.gitignore export-ignore
+.editorconfig export-ignore
+composer.lock export-ignore
+.gitattributes export-ignore
+.distignore export-ignore
+phpcs.xml.dist export-ignore
+phpstan.neon.dist export-ignore
+phpunit.xml.dist export-ignore
+vendor/ export-ignore
+tests/ export-ignore

@@ -1,0 +1,38 @@
+{
+    "name": "wp-performance-doctor/wp-performance-doctor",
+    "description": "WordPress performance diagnostics and optimization plugin.",
+    "type": "wordpress-plugin",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "WP Performance Doctor Team",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": ">=8.1"
+    },
+    "require-dev": {
+        "wp-coding-standards/wpcs": "^3.0",
+        "phpstan/phpstan": "^1.10",
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "WPPerformanceDoctor\\\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "WPPerformanceDoctor\\\\Tests\\\\": "tests/"
+        }
+    },
+    "scripts": {
+        "lint": "php -l src/ && php -l admin/ && php -l wp-performance-doctor.php && php -l uninstall.php"
+    },
+    "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true
+        }
+    }
+}

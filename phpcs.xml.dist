@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<ruleset name="WP Performance Doctor">
+    <description>WordPress Coding Standards for WP Performance Doctor.</description>
+    <file>src</file>
+    <file>admin</file>
+    <file>wp-performance-doctor.php</file>
+    <file>uninstall.php</file>
+    <arg value="sp"/>
+    <rule ref="WordPress"/>
+    <!-- PSR-4 autoloading (composer.json) uses Plugin.php-style class file names,
+     which intentionally deviates from WordPress's class-{name}.php convention.
+     FileName sniff disabled; PSR-4 naming takes precedence per project requirements. -->
+    <rule ref="WordPress.Files.FileName">
+        <severity>0</severity>
+    </rule>
+    <rule ref="WordPress.Security.EscapeOutput"/>
+    <rule ref="WordPress.Security.NonceVerification"/>
+</ruleset>

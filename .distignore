@@ -1,0 +1,11 @@
+vendor/
+tests/
+phpcs.xml.dist
+phpstan.neon.dist
+phpunit.xml.dist
+composer.json
+composer.lock
+.editorconfig
+.gitignore
+.gitattributes
+.distignore
