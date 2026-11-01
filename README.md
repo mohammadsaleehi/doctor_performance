@@ -51,9 +51,16 @@ See `docs/ARCHITECTURE.md` for module responsibilities and dependency boundaries
 ## Current development status
 
 Phase 1: Project foundation and plugin bootstrap (complete).
+Phase 2: Monitoring and data collection engine (complete).
+Phase 3: Diagnostic & Rule Engine (complete).
 
-The plugin loads correctly and registers a top-level admin menu with placeholder
-pages. No actual scanning, diagnostic rules, or optimizations are implemented yet.
+The plugin collects real performance metrics, evaluates them against a
+deterministic rule-based diagnostic engine, and provides actionable
+optimization recommendations. It includes 48 diagnostic rules across
+PHP, WordPress, database, caching, plugins/themes, PHP profiling, and
+frontend asset categories, a transparent Website Health Score (0–100),
+persisted findings with lifecycle management, a functional Diagnostics
+admin page, a Recommendations page, and secured REST API endpoints.
 
 ## Security
 

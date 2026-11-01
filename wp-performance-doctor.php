@@ -44,6 +44,4 @@ use WPPerformanceDoctor\Core\Plugin;
 register_activation_hook( __FILE__, array( Activator::class, 'activate' ) );
 register_deactivation_hook( __FILE__, array( Deactivator::class, 'deactivate' ) );
 
-if ( is_admin() ) {
-	Plugin::get_instance()->init();
-}
+Plugin::get_instance()->init();

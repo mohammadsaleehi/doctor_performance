@@ -15,6 +15,8 @@ use WPPerformanceDoctor\Admin\Pages\RecommendationsPage;
 use WPPerformanceDoctor\Admin\Pages\SettingsPage;
 use WPPerformanceDoctor\Core\Plugin;
 use WPPerformanceDoctor\Core\Uninstall;
+use WPPerformanceDoctor\Monitoring\Service;
+use WPPerformanceDoctor\Monitoring\Storage;
 
 use PHPUnit\Framework\TestCase;
 
@@ -108,5 +110,90 @@ final class BootstrapTest extends TestCase {
 			$threw = true;
 		}
 		$this->assertFalse( $threw, 'Uninstall::run() should not throw an exception.' );
+	}
+
+	/**
+	 * Assert Service::is_enabled() returns true when monitoring option is '1'.
+	 */
+	public function test_service_is_enabled_when_option_is_one(): void {
+		$storage = new Storage( '0.1.0' );
+		$service = new Service( $storage, true );
+		$this->assertTrue( $service->is_enabled() );
+	}
+
+	/**
+	 * Assert Service::is_enabled() returns false when monitoring option is '0'.
+	 */
+	public function test_service_is_disabled_when_option_is_zero(): void {
+		$storage = new Storage( '0.1.0' );
+		$service = new Service( $storage, false );
+		$this->assertFalse( $service->is_enabled() );
+	}
+
+	/**
+	 * Assert Service defaults to enabled when monitoring option is missing.
+	 */
+	public function test_service_defaults_to_enabled_when_option_missing(): void {
+		$storage = new Storage( '0.1.0' );
+		$service = new Service( $storage );
+		$this->assertTrue( $service->is_enabled() );
+	}
+
+	/**
+	 * Assert Menu::set_monitoring() stores service and storage and passes them to DashboardPage.
+	 */
+	public function test_menu_set_monitoring_wires_dashboard(): void {
+		$service = new Service( new Storage( '0.1.0' ), true );
+		$storage = new Storage( '0.1.0' );
+
+		$menu = Menu::get_instance();
+		$menu->set_monitoring( $service, $storage );
+
+		$reflection = new \ReflectionClass( $menu );
+		$prop       = $reflection->getProperty( 'monitoring_service' );
+		$prop->setAccessible( true );
+		$this->assertSame( $service, $prop->getValue( $menu ) );
+
+		$prop = $reflection->getProperty( 'storage' );
+		$prop->setAccessible( true );
+		$this->assertSame( $storage, $prop->getValue( $menu ) );
+	}
+
+	/**
+	 * Assert Admin::get_instance()->init() wires service through Menu to DashboardPage.
+	 */
+	public function test_admin_init_wires_service_to_menu(): void {
+		$service = new Service( new Storage( '0.1.0' ), true );
+		$storage = new Storage( '0.1.0' );
+
+		$admin = Admin::get_instance();
+		$admin->init( $service, $storage );
+
+		$menu = Menu::get_instance();
+		$reflection = new \ReflectionClass( $menu );
+		$prop       = $reflection->getProperty( 'monitoring_service' );
+		$prop->setAccessible( true );
+		$this->assertSame( $service, $prop->getValue( $menu ) );
+	}
+
+	/**
+	 * Assert DashboardPage::set_service() stores the service for enabled-state rendering.
+	 */
+	public function test_dashboard_page_set_service(): void {
+		$service = new Service( new Storage( '0.1.0' ), true );
+		$storage = new Storage( '0.1.0' );
+
+		$dashboard = DashboardPage::get_instance();
+		$dashboard->set_service( $service );
+		$dashboard->set_storage( $storage );
+
+		$reflection = new \ReflectionClass( $dashboard );
+		$prop       = $reflection->getProperty( 'service' );
+		$prop->setAccessible( true );
+		$this->assertSame( $service, $prop->getValue( $dashboard ) );
+
+		$prop = $reflection->getProperty( 'storage' );
+		$prop->setAccessible( true );
+		$this->assertSame( $storage, $prop->getValue( $dashboard ) );
 	}
 }
