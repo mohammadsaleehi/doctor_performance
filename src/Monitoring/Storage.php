@@ -53,6 +53,7 @@ final class Storage {
 		dbDelta( Schema::get_diagnostic_runs_sql() );
 		dbDelta( Schema::get_diagnostic_findings_sql() );
 		dbDelta( Schema::get_finding_history_sql() );
+		dbDelta( Schema::get_profiling_sessions_sql() );
 
 		// Store schema version.
 		\update_option( 'wpd_monitoring_schema_version', Schema::SCHEMA_VERSION );
@@ -72,6 +73,7 @@ final class Storage {
 			$wpdb->prefix . 'wpd_diagnostic_runs',
 			$wpdb->prefix . 'wpd_diagnostic_findings',
 			$wpdb->prefix . 'wpd_finding_history',
+			$wpdb->prefix . 'wpd_profiling_sessions',
 		);
 
 		foreach ( $tables as $table ) {
@@ -85,6 +87,13 @@ final class Storage {
 			if ( $wpdb->get_var( $sql ) !== $table ) {
 				return false;
 			}
+		}
+
+		// Only consider the schema installed when it is at the expected version so
+		// that version bumps (e.g. added columns) trigger a dbDelta upgrade.
+		$installed_version = (int) \get_option( 'wpd_monitoring_schema_version', 0 );
+		if ( $installed_version < (int) Schema::SCHEMA_VERSION ) {
+			return false;
 		}
 
 		return true;
@@ -157,13 +166,15 @@ final class Storage {
 			$batch[] = array(
 				'snapshot_id'         => $snapshot_id,
 				'metric_identifier'   => $metric->metric,
-				'metric_value'        => is_scalar( $metric->value ) ? (string) $metric->value : wp_json_encode( $metric->value ),
+				'metric_value'        => null === $metric->value ? '' : ( is_scalar( $metric->value ) ? (string) $metric->value : wp_json_encode( $metric->value ) ),
 				'unit'                => $metric->unit,
 				'category'            => $metric->category,
 				'availability_status' => $metric->status,
 				'source'              => $metric->source,
 				'collected_at'        => $metric->collected_at,
 				'metadata'            => wp_json_encode( $metric->metadata ),
+				'page_url'            => $metric->page_url,
+				'measurement_context' => $metric->measurement_context,
 			);
 
 			if ( count( $batch ) >= $batch_size ) {
@@ -201,7 +212,7 @@ final class Storage {
 
 		foreach ( $batch as $row ) {
 			$values[] = sprintf(
-				'(%d, %s, %s, %s, %s, %s, %s, %s, %s)',
+				'(%d, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
 				(int) $row['snapshot_id'],
 				$wpdb->prepare( '%s', $row['metric_identifier'] ),
 				$wpdb->prepare( '%s', $row['metric_value'] ),
@@ -210,13 +221,15 @@ final class Storage {
 				$wpdb->prepare( '%s', $row['availability_status'] ),
 				$wpdb->prepare( '%s', $row['source'] ),
 				$wpdb->prepare( '%s', $row['collected_at'] ),
-				$wpdb->prepare( '%s', $row['metadata'] )
+				$wpdb->prepare( '%s', $row['metadata'] ),
+				$wpdb->prepare( '%s', $row['page_url'] ?? '' ),
+				$wpdb->prepare( '%s', $row['measurement_context'] ?? '' )
 			);
 		}
 
 		if ( ! empty( $values ) ) {
 			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $table is validated via preg_match above.
-			$sql = 'INSERT INTO ' . $table . ' (snapshot_id, metric_identifier, metric_value, unit, category, availability_status, source, collected_at, metadata) VALUES ' . implode( ',', $values );
+			$sql = 'INSERT INTO ' . $table . ' (snapshot_id, metric_identifier, metric_value, unit, category, availability_status, source, collected_at, metadata, page_url, measurement_context) VALUES ' . implode( ',', $values );
 			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql contains only prepared values.
 			$wpdb->query( $wpdb->prepare( $sql ) );
 		}
@@ -237,6 +250,30 @@ final class Storage {
 
 		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $snapshots_table is validated via preg_match above.
 		$sql = $wpdb->prepare( 'SELECT id FROM ' . $snapshots_table . ' ORDER BY id DESC LIMIT 1' );
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql was prepared on previous line.
+		$id = $wpdb->get_var( $sql );
+
+		return $id ? (int) $id : null;
+	}
+
+	/**
+	 * Get the latest successfully completed snapshot ID.
+	 *
+	 * @return int|null
+	 */
+	public function get_latest_completed_snapshot_id(): ?int {
+		global $wpdb;
+
+		$snapshots_table = $wpdb->prefix . 'wpd_monitoring_snapshots';
+		if ( ! preg_match( '/^[a-z0-9_]+$/', $snapshots_table ) ) {
+			return null;
+		}
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $snapshots_table is validated via preg_match above.
+		$sql = $wpdb->prepare(
+			'SELECT id FROM ' . $snapshots_table . ' WHERE collection_status = %s ORDER BY id DESC LIMIT 1',
+			'completed'
+		);
 		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql was prepared on previous line.
 		$id = $wpdb->get_var( $sql );
 
@@ -334,13 +371,22 @@ final class Storage {
 	}
 
 	/**
-	 * Get metrics for a specific category from the latest snapshot.
+	 * Get metrics for a specific category, scoped to a snapshot.
 	 *
-	 * @param string $category Category name.
+	 * When $snapshot_id is provided, metrics are retrieved only from that
+	 * snapshot, preventing duplicates across snapshots. When omitted, metrics
+	 * are retrieved from the latest snapshot.
+	 *
+	 * @param string|null $category    Category name.
+	 * @param int|null    $snapshot_id Optional snapshot ID to scope results.
 	 * @return array Metric data arrays.
 	 */
-	public function get_latest_metrics_by_category( string $category ): array {
+	public function get_latest_metrics_by_category( ?string $category = null, ?int $snapshot_id = null ): array {
 		global $wpdb;
+
+		if ( ! $wpdb || null === $category ) {
+			return array();
+		}
 
 		$snapshots_table = $wpdb->prefix . 'wpd_monitoring_snapshots';
 		$metrics_table   = $wpdb->prefix . 'wpd_monitoring_metrics';
@@ -352,14 +398,24 @@ final class Storage {
 			return array();
 		}
 
+		$where  = 'WHERE m.category = %s';
+		$format = array( $category );
+
+		if ( null !== $snapshot_id ) {
+			$where   .= ' AND m.snapshot_id = %d';
+			$format[] = $snapshot_id;
+		} else {
+			$where .= ' AND s.id = (SELECT MAX(id) FROM ' . $snapshots_table . ')';
+		}
+
 		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table names validated via preg_match above.
 		$sql = $wpdb->prepare(
 			'SELECT m.* FROM ' . $metrics_table . ' m
 			INNER JOIN ' . $snapshots_table . ' s ON m.snapshot_id = s.id
-			WHERE m.category = %s
-			ORDER BY s.id DESC, m.metric_identifier
+			' . $where . '
+			ORDER BY m.metric_identifier
 			LIMIT 100',
-			$category
+			$format
 		);
 		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql was prepared on previous line.
 		$metrics = $wpdb->get_results( $sql, ARRAY_A );
@@ -668,7 +724,7 @@ final class Storage {
 				'remediation'    => wp_json_encode( $finding->remediation ),
 				'first_detected' => $finding->first_detected,
 				'last_detected'  => $finding->last_detected,
-				'resolved_at'    => $finding->resolved_at ?: null,
+				'resolved_at'    => null !== $finding->resolved_at ? $finding->resolved_at : null,
 				'snapshot_id'    => $finding->snapshot_id,
 				'run_id'         => $run_id,
 			);
@@ -701,6 +757,24 @@ final class Storage {
 					$finding_data,
 					$format
 				) ? $inserted + 1 : $inserted;
+
+				// Record initial detection as a history event so users can
+				// see when and where a finding was first detected.
+				$new_id = (int) $wpdb->insert_id;
+				$wpdb->insert(
+					$history_table,
+					array(
+						'finding_id'   => $new_id,
+						'action'       => 'initial_detected',
+						'old_status'   => '',
+						'new_status'   => $finding->status,
+						'old_severity' => '',
+						'new_severity' => $finding->severity,
+						'created_at'   => $now,
+						'notes'        => 'Initial detection.',
+					),
+					array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+				);
 			} else {
 				$existing_id  = (int) $existing['id'];
 				$old_status   = $existing['status'];
@@ -894,7 +968,7 @@ final class Storage {
 			$wpdb->prepare( 'SELECT COUNT(*) FROM ' . $table . ' ' . $where_sql, $format )
 		);
 
-		$order = isset( $filters['order'] ) && $filters['order'] === 'asc' ? 'ASC' : 'DESC';
+		$order = isset( $filters['order'] ) && 'asc' === $filters['order'] ? 'ASC' : 'DESC';
 		$items = $wpdb->get_results(
 			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $table validated, values use placeholders.
 			$wpdb->prepare(
@@ -997,7 +1071,7 @@ final class Storage {
 					'old_severity' => $existing['severity'],
 					'new_severity' => $existing['severity'],
 					'created_at'   => $now,
-					'notes'        => $notes ?: '',
+					'notes'        => '' !== $notes ? $notes : '',
 				),
 				array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
 			);
@@ -1112,6 +1186,355 @@ final class Storage {
 		);
 
 		return $rows ? array_map( 'strval', $rows ) : array();
+	}
+
+	// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared -- Table names are validated via preg_match() before use. All user data uses %s/%d placeholders.
+
+	/**
+	 * Create a profiling session record.
+	 *
+	 * @param int|null $snapshot_id   Related snapshot ID.
+	 * @param string   $mode          Profiling mode ('passive' or 'on_demand').
+	 * @param string   $trigger_type  Trigger type ('manual' or 'cron').
+	 * @param string   $request_context Request context.
+	 * @return int|false Session ID on success, false on failure.
+	 */
+	public function create_profiling_session( ?int $snapshot_id = null, string $mode = 'passive', string $trigger_type = 'manual', string $request_context = '' ) {
+		global $wpdb;
+
+		$table = $wpdb->prefix . 'wpd_profiling_sessions';
+		if ( ! preg_match( '/^[a-z0-9_]+$/', $table ) ) {
+			return false;
+		}
+
+		$timestamp = \current_time( 'mysql' );
+
+		$inserted = $wpdb->insert(
+			$table,
+			array(
+				'snapshot_id'     => $snapshot_id,
+				'mode'            => $mode,
+				'trigger_type'    => $trigger_type,
+				'started_at'      => $timestamp,
+				'status'          => 'running',
+				'request_context' => $request_context,
+			),
+			array( '%d', '%s', '%s', '%s', '%s', '%s' )
+		);
+
+		if ( false === $inserted ) {
+			return false;
+		}
+
+		return (int) $wpdb->insert_id;
+	}
+
+	/**
+	 * Update a profiling session with completion data.
+	 *
+	 * @param int   $session_id Session ID.
+	 * @param array $data       Session completion data.
+	 * @return bool
+	 */
+	public function update_profiling_session( int $session_id, array $data ): bool {
+		global $wpdb;
+
+		$table = $wpdb->prefix . 'wpd_profiling_sessions';
+		if ( ! preg_match( '/^[a-z0-9_]+$/', $table ) ) {
+			return false;
+		}
+
+		$fields = array();
+		$format = array();
+
+		if ( isset( $data['completed_at'] ) ) {
+			$fields['completed_at'] = $data['completed_at'];
+			$format[]               = '%s';
+		}
+		if ( isset( $data['status'] ) ) {
+			$fields['status'] = $data['status'];
+			$format[]         = '%s';
+		}
+		if ( isset( $data['duration'] ) ) {
+			$fields['duration'] = $data['duration'];
+			$format[]           = '%f';
+		}
+		if ( isset( $data['metrics_count'] ) ) {
+			$fields['metrics_count'] = $data['metrics_count'];
+			$format[]                = '%d';
+		}
+		if ( isset( $data['overhead_warning'] ) ) {
+			$fields['overhead_warning'] = $data['overhead_warning'];
+			$format[]                   = '%s';
+		}
+
+		if ( empty( $fields ) ) {
+			return true;
+		}
+
+		return false !== $wpdb->update(
+			$table,
+			$fields,
+			array( 'id' => $session_id ),
+			$format,
+			array( '%d' )
+		);
+	}
+
+	/**
+	 * Get profiling sessions with pagination.
+	 *
+	 * @param int $page   Page number (1-based).
+	 * @param int $per_page Items per page.
+	 * @return array{items: array, total: int}
+	 */
+	public function get_profiling_sessions( int $page = 1, int $per_page = 20 ): array {
+		global $wpdb;
+
+		$table = $wpdb->prefix . 'wpd_profiling_sessions';
+		if ( ! preg_match( '/^[a-z0-9_]+$/', $table ) ) {
+			return array(
+				'items' => array(),
+				'total' => 0,
+			);
+		}
+
+		$page     = max( 1, $page );
+		$per_page = max( 1, min( 100, $per_page ) );
+		$offset   = ( $page - 1 ) * $per_page;
+
+		$total = (int) $wpdb->get_var(
+			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $table validated via preg_match above.
+			$wpdb->prepare( 'SELECT COUNT(*) FROM ' . $table )
+		);
+
+		$items = $wpdb->get_results(
+			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $table validated via preg_match above.
+			$wpdb->prepare(
+				'SELECT * FROM ' . $table . ' ORDER BY id DESC LIMIT %d OFFSET %d',
+				$per_page,
+				$offset
+			),
+			ARRAY_A
+		);
+
+		return array(
+			'items' => $items ? $items : array(),
+			'total' => $total,
+		);
+	}
+
+	/**
+	 * Get a single profiling session by ID.
+	 *
+	 * @param int $session_id Session ID.
+	 * @return array|null
+	 */
+	public function get_profiling_session( int $session_id ): ?array {
+		global $wpdb;
+
+		$table = $wpdb->prefix . 'wpd_profiling_sessions';
+		if ( ! preg_match( '/^[a-z0-9_]+$/', $table ) ) {
+			return null;
+		}
+
+		$row = $wpdb->get_row(
+			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $table validated via preg_match above.
+			$wpdb->prepare( 'SELECT * FROM ' . $table . ' WHERE id = %d', $session_id ),
+			ARRAY_A
+		);
+
+		return $row ? $row : null;
+	}
+
+	/**
+	 * Save browser-collected performance metrics for a profiling session.
+	 *
+	 * Validates every metric identifier against an explicit allowlist before
+	 * storing. Numeric values are validated and sanitized. Resource URLs are
+	 * sanitized before storage. Every stored metric is associated with the
+	 * given profiling session's snapshot.
+	 *
+	 * @param int    $session_id Profiling session ID.
+	 * @param array  $metrics    Array of metric data keyed by metric identifier.
+	 *                           Each entry: array( 'value' => mixed, 'unit' => string, 'category' => string, 'availability_status' => string, 'metadata' => array ).
+	 * @param string $snapshot_id Snapshot ID the metrics belong to.
+	 * @return int|false Number of metrics stored on success, false on failure.
+	 */
+	public function save_browser_metrics( int $session_id, array $metrics, string $snapshot_id ) {
+		global $wpdb;
+
+		$session_table = $wpdb->prefix . 'wpd_profiling_sessions';
+		$metrics_table = $wpdb->prefix . 'wpd_monitoring_metrics';
+
+		if ( ! preg_match( '/^[a-z0-9_]+$/', $session_table ) ) {
+			return false;
+		}
+		if ( ! preg_match( '/^[a-z0-9_]+$/', $metrics_table ) ) {
+			return false;
+		}
+
+		// Verify the session exists and matches the submitted snapshot.
+		$session = $this->get_profiling_session( $session_id );
+		if ( null === $session ) {
+			return false;
+		}
+		if ( (int) $session['snapshot_id'] !== (int) $snapshot_id ) {
+			return false;
+		}
+
+		// Allowlist of browser-collected metric identifiers.
+		$allowed_metrics = array(
+			'frontend.navigation_timing_dns',
+			'frontend.navigation_timing_tcp',
+			'frontend.navigation_timing_tls',
+			'frontend.navigation_timing_request_start',
+			'frontend.navigation_timing_ttfb',
+			'frontend.navigation_timing_response_download',
+			'frontend.navigation_timing_dom_interactive',
+			'frontend.navigation_timing_dom_content_loaded',
+			'frontend.navigation_timing_dom_complete',
+			'frontend.navigation_timing_page_load',
+			'frontend.navigation_timing_redirect',
+			'frontend.resource_count',
+			'frontend.css_resource_count',
+			'frontend.js_resource_count',
+			'frontend.image_resource_count',
+			'frontend.font_resource_count',
+			'frontend.external_resource_count',
+			'frontend.resource_transfer_size',
+			'frontend.resource_loading_duration',
+			'frontend.largest_contentful_paint',
+			'frontend.cumulative_layout_shift',
+			'frontend.interaction_to_next_paint',
+			'frontend.browser_support',
+		);
+
+		$valid_metrics = array();
+		$collected_at    = \current_time( 'mysql' );
+
+		foreach ( $metrics as $metric_id => $data ) {
+			if ( ! is_string( $metric_id ) || ! in_array( $metric_id, $allowed_metrics, true ) ) {
+				continue;
+			}
+
+			// Use array_key_exists() (not isset()) so that unavailable metrics
+			// with a null value are still recorded with their availability
+			// state instead of being silently dropped.
+			if ( ! array_key_exists( 'value', $data ) || ! isset( $data['unit'] ) ) {
+				continue;
+			}
+
+			$value      = $data['value'];
+			$unit       = sanitize_text_field( $data['unit'] );
+			$category   = sanitize_text_field( $data['category'] ?? 'frontend' );
+			$availability = sanitize_text_field( $data['availability_status'] ?? 'available' );
+			$page_url   = isset( $data['page_url'] ) ? esc_url_raw( $data['page_url'] ) : '';
+			$context    = isset( $data['measurement_context'] ) ? sanitize_text_field( $data['measurement_context'] ) : '';
+			$metadata   = isset( $data['metadata'] ) && is_array( $data['metadata'] ) ? $data['metadata'] : array();
+
+			// Sanitize resource URLs in metadata. Strip query strings and
+			// fragments so authentication tokens, session IDs, and other
+			// query-string secrets are never stored.
+			if ( isset( $metadata['resource_urls'] ) && is_array( $metadata['resource_urls'] ) ) {
+				$sanitized_urls = array();
+				foreach ( $metadata['resource_urls'] as $url ) {
+					if ( is_string( $url ) && '' !== $url ) {
+						$sanitized_urls[] = self::sanitize_resource_url( $url );
+					}
+				}
+				$metadata['resource_urls'] = array_slice( $sanitized_urls, 0, 20 );
+			}
+
+			// Validate numeric values.
+			if ( is_numeric( $value ) ) {
+				$numeric_value = (float) $value;
+				if ( ! is_finite( $numeric_value ) || $numeric_value < 0 ) {
+					continue;
+				}
+				$stored_value = $numeric_value;
+			} elseif ( is_bool( $value ) || is_string( $value ) || null === $value ) {
+				$stored_value = $value;
+			} else {
+				continue;
+			}
+
+			$valid_metrics[] = array(
+				'snapshot_id'         => (int) $snapshot_id,
+				'metric_identifier'   => $metric_id,
+				'metric_value'        => is_scalar( $stored_value ) ? (string) $stored_value : wp_json_encode( $stored_value ),
+				'unit'                => $unit,
+				'category'            => $category,
+				'availability_status' => $availability,
+				'source'              => 'browser',
+				'collected_at'        => $collected_at,
+				'metadata'            => wp_json_encode( $metadata ),
+				'page_url'            => $page_url,
+				'measurement_context' => $context,
+			);
+		}
+
+		if ( empty( $valid_metrics ) ) {
+			return 0;
+		}
+
+		$batch_size = 100;
+		$batch      = array();
+		$prepared   = 0;
+
+		foreach ( $valid_metrics as $metric ) {
+			$batch[] = $metric;
+			$prepared++;
+
+			if ( count( $batch ) >= $batch_size ) {
+				$this->insert_metrics_batch( $metrics_table, $batch );
+				$batch = array();
+			}
+		}
+
+		if ( ! empty( $batch ) ) {
+			$this->insert_metrics_batch( $metrics_table, $batch );
+		}
+
+		return $prepared > 0 ? $prepared : 0;
+	}
+
+	/**
+	 * Sanitize a resource URL for storage.
+	 *
+	 * Strips query strings and fragments so authentication tokens, session
+	 * identifiers, cookies, and other query-string secrets are never stored.
+	 * Only the scheme, host, port, and path are retained.
+	 *
+	 * @param string $url Resource URL.
+	 * @return string Sanitized URL.
+	 */
+	private static function sanitize_resource_url( string $url ): string {
+		$parsed = parse_url( $url );
+		if ( false === $parsed || ! isset( $parsed['host'] ) ) {
+			return esc_url_raw( $url );
+		}
+
+		$clean = '';
+		if ( isset( $parsed['scheme'] ) ) {
+			$clean .= $parsed['scheme'] . '://';
+		}
+		if ( isset( $parsed['user'] ) ) {
+			$clean .= $parsed['user'];
+			if ( isset( $parsed['pass'] ) ) {
+				$clean .= ':' . $parsed['pass'];
+			}
+			$clean .= '@';
+		}
+		$clean .= $parsed['host'];
+		if ( isset( $parsed['port'] ) ) {
+			$clean .= ':' . $parsed['port'];
+		}
+		if ( isset( $parsed['path'] ) ) {
+			$clean .= $parsed['path'];
+		}
+
+		return esc_url_raw( $clean );
 	}
 }
 // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared
