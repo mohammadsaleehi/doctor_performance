@@ -11,31 +11,31 @@
 use WPPerformanceDoctor\Admin\Formatter\MetricFormatter;
 use WPPerformanceDoctor\Rules\Severity;
 
-$enabled          = ! empty( $data['enabled'] );
-$has_data         = ! empty( $data['has_data'] );
-$metrics          = $data['metrics'] ?? array();
-$metrics_by_id    = $data['metrics_by_id'] ?? array();
-$grouped_metrics  = $data['grouped_metrics'] ?? array();
-$category_labels  = $data['category_labels'] ?? array();
-$bottlenecks      = $data['bottlenecks'] ?? array();
+$enabled            = ! empty( $data['enabled'] );
+$has_data           = ! empty( $data['has_data'] );
+$metrics            = $data['metrics'] ?? array();
+$metrics_by_id      = $data['metrics_by_id'] ?? array();
+$grouped_metrics    = $data['grouped_metrics'] ?? array();
+$category_labels    = $data['category_labels'] ?? array();
+$bottlenecks        = $data['bottlenecks'] ?? array();
 $bottleneck_summary = $data['bottleneck_summary'] ?? array(
 	'confirmed' => 0,
 	'potential' => 0,
 	'info'      => 0,
 );
-$sessions         = $data['sessions'] ?? array();
-$sessions_total   = (int) ( $data['sessions_total'] ?? 0 );
-$latest_session   = $data['latest_session'] ?? null;
-$comparison       = $data['comparison'] ?? null;
-$overview         = $data['overview'] ?? array();
-$frontend_metrics = $data['frontend_metrics'] ?? array();
-$resource_metrics = $data['resource_metrics'] ?? array();
-$database_metrics = $data['database_metrics'] ?? array();
-$rest_url         = $data['rest_url'] ?? '';
-$browser_rest_url = $data['browser_rest_url'] ?? '';
-$collect_nonce    = $data['nonce'] ?? \wp_create_nonce( 'wpd_collect' );
-$browser_nonce    = $data['browser_nonce'] ?? \wp_create_nonce( 'wpd_collect' );
-$wp_rest_nonce    = \wp_create_nonce( 'wp_rest' );
+$sessions           = $data['sessions'] ?? array();
+$sessions_total     = (int) ( $data['sessions_total'] ?? 0 );
+$latest_session     = $data['latest_session'] ?? null;
+$comparison         = $data['comparison'] ?? null;
+$overview           = $data['overview'] ?? array();
+$frontend_metrics   = $data['frontend_metrics'] ?? array();
+$resource_metrics   = $data['resource_metrics'] ?? array();
+$database_metrics   = $data['database_metrics'] ?? array();
+$rest_url           = $data['rest_url'] ?? '';
+$browser_rest_url   = $data['browser_rest_url'] ?? '';
+$collect_nonce      = $data['nonce'] ?? \wp_create_nonce( 'wpd_collect' );
+$browser_nonce      = $data['browser_nonce'] ?? \wp_create_nonce( 'wpd_collect' );
+$wp_rest_nonce      = \wp_create_nonce( 'wp_rest' );
 
 $session_id   = $latest_session['id'] ?? '';
 $snapshot_id  = $latest_session['snapshot_id'] ?? '';
@@ -47,9 +47,24 @@ $confirmed_count = (int) ( $bottleneck_summary['confirmed'] ?? 0 );
 $potential_count = (int) ( $bottleneck_summary['potential'] ?? 0 );
 $info_count      = (int) ( $bottleneck_summary['info'] ?? 0 );
 
-$confirmed_bottlenecks = array_filter( $bottlenecks, function ( $b ) { return 'confirmed' === ( $b['type'] ?? '' ); } );
-$potential_bottlenecks = array_filter( $bottlenecks, function ( $b ) { return 'potential' === ( $b['type'] ?? '' ); } );
-$info_bottlenecks      = array_filter( $bottlenecks, function ( $b ) { return 'info' === ( $b['type'] ?? '' ); } );
+$confirmed_bottlenecks = array_filter(
+	$bottlenecks,
+	function ( $b ) {
+		return 'confirmed' === ( $b['type'] ?? '' );
+	}
+);
+$potential_bottlenecks = array_filter(
+	$bottlenecks,
+	function ( $b ) {
+		return 'potential' === ( $b['type'] ?? '' );
+	}
+);
+$info_bottlenecks      = array_filter(
+	$bottlenecks,
+	function ( $b ) {
+		return 'info' === ( $b['type'] ?? '' );
+	}
+);
 
 $type_badge_classes = array(
 	'confirmed' => 'wpd-finding-type--confirmed',
@@ -74,24 +89,24 @@ $severity_badge_classes = array(
 	echo \esc_html(
 		\wp_json_encode(
 			array(
-				'restUrl'     => $rest_url,
+				'restUrl'        => $rest_url,
 				'restBrowserUrl' => $browser_rest_url,
-				'nonce'       => $collect_nonce,
-				'browserNonce' => $browser_nonce,
-				'wpRestNonce' => $wp_rest_nonce,
-				'sessionId'   => $session_id,
-				'snapshotId'  => $snapshot_id,
-				'targetUrl'   => $target_url,
-				'strings'     => array(
-					'runProfile'    => __( 'Run Profile', 'wp-performance-doctor' ),
-					'profiling'     => __( 'Profiling…', 'wp-performance-doctor' ),
-					'complete'      => __( 'Profile complete.', 'wp-performance-doctor' ),
-					'error'         => __( 'Profiling failed.', 'wp-performance-doctor' ),
-					'noData'        => __( 'No performance data available. Run a profile to collect measurements.', 'wp-performance-doctor' ),
+				'nonce'          => $collect_nonce,
+				'browserNonce'   => $browser_nonce,
+				'wpRestNonce'    => $wp_rest_nonce,
+				'sessionId'      => $session_id,
+				'snapshotId'     => $snapshot_id,
+				'targetUrl'      => $target_url,
+				'strings'        => array(
+					'runProfile'     => __( 'Run Profile', 'wp-performance-doctor' ),
+					'profiling'      => __( 'Profiling…', 'wp-performance-doctor' ),
+					'complete'       => __( 'Profile complete.', 'wp-performance-doctor' ),
+					'error'          => __( 'Profiling failed.', 'wp-performance-doctor' ),
+					'noData'         => __( 'No performance data available. Run a profile to collect measurements.', 'wp-performance-doctor' ),
 					'collectBrowser' => __( 'Collect Browser Metrics', 'wp-performance-doctor' ),
-					'collecting'    => __( 'Collecting browser metrics…', 'wp-performance-doctor' ),
-					'browserStored' => __( 'Browser metrics stored.', 'wp-performance-doctor' ),
-					'noSession'     => __( 'No active profiling session. Run a profile first.', 'wp-performance-doctor' ),
+					'collecting'     => __( 'Collecting browser metrics…', 'wp-performance-doctor' ),
+					'browserStored'  => __( 'Browser metrics stored.', 'wp-performance-doctor' ),
+					'noSession'      => __( 'No active profiling session. Run a profile first.', 'wp-performance-doctor' ),
 				),
 			)
 		)
@@ -102,8 +117,8 @@ $severity_badge_classes = array(
 	<div id="wpd-performance-notice" class="wpd-notice wpd-notice--inline wpd-hidden"></div>
 
 	<!-- ======================================================================
-	     A. Page Header
-	     ====================================================================== -->
+		A. Page Header
+		====================================================================== -->
 	<header class="wpd-page-header wpd-page-header--stacked">
 		<div class="wpd-header-brand">
 			<div class="wpd-header-title">
@@ -149,7 +164,7 @@ $severity_badge_classes = array(
 			</button>
 			<?php else : ?>
 			<button type="button" class="wpd-button wpd-button--primary wpd-button--medium wpd-button--disabled" disabled title="<?php \esc_attr_e( 'Performance profiling is disabled. Enable it in Settings to start profiling.', 'wp-performance-doctor' ); ?>">
-				<span class="wpd-button-label"><?php \esc_html_e( 'Run Profile', 'wp-performance-doctor' ); ?></span>
+				<span class="wpd-button-label" id="wpd-run-profile-label"><?php \esc_html_e( 'Run Profile', 'wp-performance-doctor' ); ?></span>
 			</button>
 			<?php endif; ?>
 		</div>
@@ -162,8 +177,8 @@ $severity_badge_classes = array(
 	<?php endif; ?>
 
 	<!-- ======================================================================
-	     B. Performance Overview
-	     ====================================================================== -->
+		B. Performance Overview
+		====================================================================== -->
 	<section class="wpd-section">
 		<div class="wpd-section-header">
 			<h2 class="wpd-section-title"><?php \esc_html_e( 'Performance Overview', 'wp-performance-doctor' ); ?></h2>
@@ -173,39 +188,31 @@ $severity_badge_classes = array(
 			<?php
 			$overview_cards = array(
 				array(
-					'title' => __( 'Confirmed Bottlenecks', 'wp-performance-doctor' ),
-					'value' => $confirmed_count,
+					'title'       => __( 'Confirmed Bottlenecks', 'wp-performance-doctor' ),
+					'value'       => $confirmed_count,
 					'explanation' => __( 'Issues confirmed from collected measurements that are likely affecting performance.', 'wp-performance-doctor' ),
-					'class'   => $confirmed_count > 0 ? 'wpd-kpi-card--attention' : '',
+					'class'       => $confirmed_count > 0 ? 'wpd-kpi-card--attention' : '',
 				),
 				array(
-					'title' => __( 'Available Measurements', 'wp-performance-doctor' ),
-					'value' => (int) ( $overview['available_measurements'] ?? \count( $metrics ) ),
+					'title'       => __( 'Available Measurements', 'wp-performance-doctor' ),
+					'value'       => (int) ( $overview['available_measurements'] ?? \count( $metrics ) ),
 					'explanation' => __( 'Individual metrics collected during the latest profiling session.', 'wp-performance-doctor' ),
-					'class'   => '',
-				),
-				array(
-					'title' => __( 'Latest Profile', 'wp-performance-doctor' ),
-					'value' => $latest_session ? \esc_html( MetricFormatter::format_date( $latest_session['started_at'] ?? null ) ) : __( 'Not yet', 'wp-performance-doctor' ),
-					'value_is_html' => true,
-					'explanation' => __( 'When the most recent profiling session was completed.', 'wp-performance-doctor' ),
-					'class'   => '',
+					'class'       => '',
 				),
 			);
 			foreach ( $overview_cards as $card ) :
-			?>
+				?>
 			<div class="wpd-kpi-card <?php echo \esc_attr( $card['class'] ); ?>">
 				<div class="wpd-kpi-card-body">
 					<div class="wpd-kpi-card-header">
 						<span class="wpd-kpi-card-title"><?php echo \esc_html( $card['title'] ); ?></span>
 					</div>
-					<span class="wpd-kpi-card-value"><?php
-						if ( ! empty( $card['value_is_html'] ) ) {
-							echo $card['value'];
-						} else {
-							echo \esc_html( $card['value'] );
-						}
-					?></span>
+					<span class="wpd-kpi-card-value">
+					<?php
+					echo \esc_html( $card['value'] );
+					?>
+					?>
+					</span>
 					<p class="wpd-kpi-card-label"><?php echo \esc_html( $card['explanation'] ); ?></p>
 				</div>
 			</div>
@@ -214,8 +221,8 @@ $severity_badge_classes = array(
 	</section>
 
 	<!-- ======================================================================
-	     C. Run Profile
-	     ====================================================================== -->
+		C. Run Profile
+		====================================================================== -->
 	<section class="wpd-section">
 		<div class="wpd-section-header">
 			<h2 class="wpd-section-title"><?php \esc_html_e( 'Run Profile', 'wp-performance-doctor' ); ?></h2>
@@ -244,9 +251,9 @@ $severity_badge_classes = array(
 								<p class="wpd-form-hint"><?php \esc_html_e( 'On-demand profiles are started manually by an administrator.', 'wp-performance-doctor' ); ?></p>
 							</div>
 						</div>
-						<button type="button" class="wpd-button wpd-button--primary wpd-button--medium" id="wpd-run-profile">
+						<button type="button" class="wpd-button wpd-button--primary wpd-button--medium" id="wpd-run-server-profile">
 							<span class="wpd-button-spinner"></span>
-							<span class="wpd-button-label" id="wpd-run-profile-label"><?php \esc_html_e( 'Run Profile', 'wp-performance-doctor' ); ?></span>
+							<span class="wpd-button-label" id="wpd-run-server-profile-label"><?php \esc_html_e( 'Run Profile', 'wp-performance-doctor' ); ?></span>
 						</button>
 					</div>
 
@@ -282,8 +289,8 @@ $severity_badge_classes = array(
 	</section>
 
 	<!-- ======================================================================
-	     D. Bottlenecks & Recommendations
-	     ====================================================================== -->
+		D. Bottlenecks & Recommendations
+		====================================================================== -->
 	<section class="wpd-section">
 		<div class="wpd-section-header">
 			<h2 class="wpd-section-title"><?php \esc_html_e( 'Bottlenecks &amp; Recommendations', 'wp-performance-doctor' ); ?></h2>
@@ -320,16 +327,16 @@ $severity_badge_classes = array(
 
 				<div class="wpd-bottleneck-grid">
 					<?php foreach ( $bottlenecks as $bottleneck ) : ?>
-					<?php
-					$b_type      = $bottleneck['type'] ?? 'info';
-					$b_severity  = $bottleneck['severity'] ?? 'info';
-					$b_conf      = $bottleneck['confidence'] ?? 'low';
-					$b_class     = $type_badge_classes[ $b_type ] ?? 'wpd-finding-type--info';
-					$sev_class   = $severity_badge_classes[ $b_severity ] ?? 'wpd-severity--info';
-					$evidence    = $bottleneck['evidence'] ?? array();
-					$remediation = $bottleneck['remediation'] ?? array();
-					$steps       = $remediation['steps'] ?? array();
-					?>
+						<?php
+						$b_type      = $bottleneck['type'] ?? 'info';
+						$b_severity  = $bottleneck['severity'] ?? 'info';
+						$b_conf      = $bottleneck['confidence'] ?? 'low';
+						$b_class     = $type_badge_classes[ $b_type ] ?? 'wpd-finding-type--info';
+						$sev_class   = $severity_badge_classes[ $b_severity ] ?? 'wpd-severity--info';
+						$evidence    = $bottleneck['evidence'] ?? array();
+						$remediation = $bottleneck['remediation'] ?? array();
+						$steps       = $remediation['steps'] ?? array();
+						?>
 					<article class="wpd-bottleneck-card wpd-bottleneck--<?php echo \esc_attr( $b_type ); ?>">
 						<div class="wpd-bottleneck-header">
 							<div class="wpd-bottleneck-header__main">
@@ -363,16 +370,18 @@ $severity_badge_classes = array(
 									<tbody>
 									<?php foreach ( $evidence as $key => $ev ) : ?>
 										<?php
-										$m = $metrics_by_id[ $key ] ?? null;
-										$disp = MetricFormatter::display_data( array_merge(
-											array(
-												'metric_identifier'   => $key,
-												'metric_value'        => $ev,
-												'unit'                  => $m['unit'] ?? '',
-												'availability_status'   => 'available',
-											),
-											$m ?? array()
-										) );
+										$metric_row = $metrics_by_id[ $key ] ?? null;
+										$disp       = MetricFormatter::display_data(
+											array_merge(
+												array(
+													'metric_identifier' => $key,
+													'metric_value' => $ev,
+													'unit' => $m['unit'] ?? '',
+													'availability_status' => 'available',
+												),
+												$m ?? array()
+											)
+										);
 										?>
 									<tr>
 										<th><?php echo \esc_html( $disp['label'] ); ?></th>
@@ -384,10 +393,10 @@ $severity_badge_classes = array(
 							</div>
 							<?php endif; ?>
 							<?php
-							$impact   = $bottleneck['impact'] ?? '';
+							$impact      = $bottleneck['impact'] ?? '';
 							$limitations = $bottleneck['measurement_limitations'] ?? '';
 							if ( $impact || $limitations ) :
-							?>
+								?>
 							<div class="wpd-bottleneck-details">
 								<?php if ( $impact ) : ?>
 								<p class="wpd-bottleneck-impact"><span class="wpd-bottleneck-details__label"><?php \esc_html_e( 'Why it matters:', 'wp-performance-doctor' ); ?></span> <?php echo \esc_html( $impact ); ?></p>
@@ -422,8 +431,8 @@ $severity_badge_classes = array(
 	</section>
 
 	<!-- ======================================================================
-	     E. Frontend Performance
-	     ====================================================================== -->
+		E. Frontend Performance
+		====================================================================== -->
 	<section class="wpd-section">
 		<div class="wpd-section-header">
 			<h2 class="wpd-section-title"><?php \esc_html_e( 'Frontend Performance', 'wp-performance-doctor' ); ?></h2>
@@ -443,32 +452,39 @@ $severity_badge_classes = array(
 						<span class="wpd-frontend-context__label"><?php \esc_html_e( 'Context:', 'wp-performance-doctor' ); ?></span>
 						<span class="wpd-frontend-context__value"><?php echo \esc_html( $context_label ); ?></span>
 					</div>
-					<?php $any_frontend = false; foreach ( $frontend_metrics as $fm ) { if ( $fm['available'] ) { $any_frontend = true; break; } } ?>
+					<?php
+					$any_frontend = false;
+					foreach ( $frontend_metrics as $fm ) {
+						if ( $fm['available'] ) {
+							$any_frontend = true;
+							break; }
+					}
+					?>
 				<?php if ( ! $any_frontend ) : ?>
 				<div class="wpd-empty-state">
 					<p class="wpd-empty-state-title"><?php \esc_html_e( 'No frontend performance measurements yet.', 'wp-performance-doctor' ); ?></p>
 					<p><?php \esc_html_e( 'Collect browser metrics to see TTFB, LCP, CLS, INP and page load timings.', 'wp-performance-doctor' ); ?></p>
-					<button type="button" class="wpd-button wpd-button--primary wpd-button--medium" id="wpd-run-frontend-profile">
+					<button type="button" class="wpd-button wpd-button--primary wpd-button--medium" id="wpd-run-frontend-profile-empty">
 						<span class="wpd-button-spinner"></span>
-						<span class="wpd-button-label" id="wpd-run-frontend-profile-label"><?php \esc_html_e( 'Collect Browser Metrics', 'wp-performance-doctor' ); ?></span>
+						<span class="wpd-button-label" id="wpd-run-frontend-profile-label-empty"><?php \esc_html_e( 'Collect Browser Metrics', 'wp-performance-doctor' ); ?></span>
 					</button>
-					<input type="hidden" id="wpd-perf-session-id" value="<?php echo \esc_attr( $session_id ); ?>">
-					<input type="hidden" id="wpd-perf-snapshot-id" value="<?php echo \esc_attr( $snapshot_id ); ?>">
+					<input type="hidden" id="wpd-perf-session-id-empty" value="<?php echo \esc_attr( $session_id ); ?>">
+					<input type="hidden" id="wpd-perf-snapshot-id-empty" value="<?php echo \esc_attr( $snapshot_id ); ?>">
 				</div>
 				<?php else : ?>
 				<div class="wpd-vital-grid">
 					<?php foreach ( $frontend_metrics as $fm ) : ?>
-					<?php
-					$vital_tooltips = array(
-						'frontend.navigation_timing_ttfb'       => __( 'Time from the browser request to the first byte of the server response.', 'wp-performance-doctor' ),
-						'frontend.largest_contentful_paint'     => __( 'When the largest visible content element finishes rendering.', 'wp-performance-doctor' ),
-						'frontend.cumulative_layout_shift'      => __( 'Unexpected layout shifts that occur while the page loads.', 'wp-performance-doctor' ),
-						'frontend.interaction_to_next_paint'    => __( 'The slowest interaction latency on the page.', 'wp-performance-doctor' ),
-						'frontend.navigation_timing_dom_content_loaded' => __( 'When the initial HTML document is fully loaded and parsed.', 'wp-performance-doctor' ),
-						'frontend.navigation_timing_page_load'  => __( 'When the page and all its resources have finished loading.', 'wp-performance-doctor' ),
-					);
-					$tooltip = $vital_tooltips[ $fm['identifier'] ] ?? '';
-					?>
+						<?php
+						$vital_tooltips = array(
+							'frontend.navigation_timing_ttfb'  => __( 'Time from the browser request to the first byte of the server response.', 'wp-performance-doctor' ),
+							'frontend.largest_contentful_paint' => __( 'When the largest visible content element finishes rendering.', 'wp-performance-doctor' ),
+							'frontend.cumulative_layout_shift' => __( 'Unexpected layout shifts that occur while the page loads.', 'wp-performance-doctor' ),
+							'frontend.interaction_to_next_paint' => __( 'The slowest interaction latency on the page.', 'wp-performance-doctor' ),
+							'frontend.navigation_timing_dom_content_loaded' => __( 'When the initial HTML document is fully loaded and parsed.', 'wp-performance-doctor' ),
+							'frontend.navigation_timing_page_load' => __( 'When the page and all its resources have finished loading.', 'wp-performance-doctor' ),
+						);
+						$tooltip        = $vital_tooltips[ $fm['identifier'] ] ?? '';
+						?>
 					<div class="wpd-vital-card wpd-vital--<?php echo \esc_attr( $fm['rating'] ?? 'not-measured' ); ?>">
 						<div class="wpd-vital-card__label">
 							<?php echo \esc_html( $fm['label'] ); ?>
@@ -496,8 +512,8 @@ $severity_badge_classes = array(
 	</section>
 
 	<!-- ======================================================================
-	     F. Resource Analysis
-	     ====================================================================== -->
+		F. Resource Analysis
+		====================================================================== -->
 	<section class="wpd-section">
 		<div class="wpd-section-header">
 			<h2 class="wpd-section-title"><?php \esc_html_e( 'Resource Analysis', 'wp-performance-doctor' ); ?></h2>
@@ -523,8 +539,8 @@ $severity_badge_classes = array(
 	</section>
 
 	<!-- ======================================================================
-	     G. Database Profiling
-	     ====================================================================== -->
+		G. Database Profiling
+		====================================================================== -->
 	<section class="wpd-section">
 		<div class="wpd-section-header">
 			<h2 class="wpd-section-title"><?php \esc_html_e( 'Database Profiling', 'wp-performance-doctor' ); ?></h2>
@@ -605,7 +621,7 @@ $severity_badge_classes = array(
 				<?php
 				$qt = $db_metric( 'database.query_type_distribution' );
 				if ( $qt['available'] && is_array( $qt['value'] ) && ! empty( $qt['value'] ) ) :
-				?>
+					?>
 				<div class="wpd-database-types wpd-mt-6">
 					<h4 class="wpd-database-types-title"><?php \esc_html_e( 'Query Type Distribution', 'wp-performance-doctor' ); ?></h4>
 					<table class="wpd-table wpd-table--compact">
@@ -650,8 +666,8 @@ $severity_badge_classes = array(
 	</section>
 
 	<!-- ======================================================================
-	     H. Collected Metrics
-	     ====================================================================== -->
+		H. Collected Metrics
+		====================================================================== -->
 	<section class="wpd-section">
 		<div class="wpd-section-header">
 			<h2 class="wpd-section-title"><?php \esc_html_e( 'Collected Metrics', 'wp-performance-doctor' ); ?></h2>
@@ -665,7 +681,7 @@ $severity_badge_classes = array(
 					<p><?php \esc_html_e( 'Run a profile to collect measurements.', 'wp-performance-doctor' ); ?></p>
 				</div>
 				<?php else : ?>
-				<?php foreach ( $grouped_metrics as $category => $category_metrics ) : ?>
+					<?php foreach ( $grouped_metrics as $category => $category_metrics ) : ?>
 				<div class="wpd-metric-category wpd-mt-6">
 					<div class="wpd-expandable" id="wpd-metrics-category-<?php echo \esc_attr( $category ); ?>">
 						<div class="wpd-expandable-header" role="button" tabindex="0" aria-expanded="false" aria-controls="wpd-metrics-category-content-<?php echo \esc_attr( $category ); ?>">
@@ -678,10 +694,10 @@ $severity_badge_classes = array(
 						<div class="wpd-expandable-content" id="wpd-metrics-category-content-<?php echo \esc_attr( $category ); ?>" hidden>
 							<div class="wpd-metric-grid">
 								<?php foreach ( $category_metrics as $metric ) : ?>
-								<?php
-								$logical_id = $metric['logical_identifier'] ?? ( $metric['metric_identifier'] ?? '' );
-								$disp = MetricFormatter::display_data( $metric );
-								?>
+									<?php
+									$logical_id = $metric['logical_identifier'] ?? ( $metric['metric_identifier'] ?? '' );
+									$disp       = MetricFormatter::display_data( $metric );
+									?>
 								<div class="wpd-metric-card">
 									<div class="wpd-metric-card-body">
 										<span class="wpd-metric-label"><?php echo \esc_html( $disp['label'] ); ?></span>
@@ -706,15 +722,15 @@ $severity_badge_classes = array(
 									</thead>
 									<tbody>
 									<?php foreach ( $category_metrics as $metric ) : ?>
-									<?php
-									$raw_id = $metric['metric_identifier'] ?? '';
-									$logical_id = $metric['logical_identifier'] ?? $raw_id;
-									$disp = MetricFormatter::display_data( $metric );
-									?>
+										<?php
+										$raw_id     = $metric['metric_identifier'] ?? '';
+										$logical_id = $metric['logical_identifier'] ?? $raw_id;
+										$disp       = MetricFormatter::display_data( $metric );
+										?>
 									<tr>
 										<td class="wpd-text--mono wpd-text--small"><?php echo \esc_html( $logical_id ); ?></td>
 										<td class="wpd-table-cell-numeric wpd-text--mono wpd-text--small"><?php echo \esc_html( $disp['display'] ); ?></td>
-										<td class="wpd-text--small"><?php echo \esc_html( $disp['unit'] ?: __( '—', 'wp-performance-doctor' ) ); ?></td>
+										<td class="wpd-text--small"><?php echo \esc_html( $disp['unit'] ? $disp['unit'] : __( '—', 'wp-performance-doctor' ) ); ?></td>
 										<td><span class="wpd-metric-status wpd-metric-status--<?php echo \esc_attr( $disp['available'] ? 'available' : 'unavailable' ); ?> wpd-metric-status--small"><?php echo \esc_html( $disp['status_label'] ); ?></span></td>
 									</tr>
 									<?php endforeach; ?>
@@ -731,8 +747,8 @@ $severity_badge_classes = array(
 	</section>
 
 	<!-- ======================================================================
-	     I. Historical Comparison
-	     ====================================================================== -->
+		I. Historical Comparison
+		====================================================================== -->
 	<section class="wpd-section">
 		<div class="wpd-section-header">
 			<h2 class="wpd-section-title"><?php \esc_html_e( 'Historical Comparison', 'wp-performance-doctor' ); ?></h2>
@@ -741,9 +757,9 @@ $severity_badge_classes = array(
 		<div class="wpd-panel">
 			<div class="wpd-panel-body">
 				<?php
-				$has_comp = ! empty( $comparison['has_comparison'] );
+				$has_comp  = ! empty( $comparison['has_comparison'] );
 				$prev_snap = $comparison['previous_snapshot'] ?? null;
-				$comps = $comparison['comparisons'] ?? array();
+				$comps     = $comparison['comparisons'] ?? array();
 				?>
 				<?php if ( ! $has_comp ) : ?>
 				<div class="wpd-empty-state">
@@ -785,7 +801,7 @@ $severity_badge_classes = array(
 						<td class="wpd-table-cell-numeric"><?php echo \esc_html( $comp['difference_display'] ); ?></td>
 						<td class="wpd-table-cell-numeric"><?php echo \esc_html( $comp['percent_display'] ); ?></td>
 						<td>
-							<span class="wpd-badge wpd-badge--small wpd-badge--<?php echo \esc_attr( $comp['interpretation'] === 'improved' ? 'success' : ( $comp['interpretation'] === 'worsened' ? 'warning' : 'outline' ) ); ?>">
+							<span class="wpd-badge wpd-badge--small wpd-badge--<?php echo \esc_attr( 'improved' === $comp['interpretation'] ? 'success' : ( 'worsened' === $comp['interpretation'] ? 'warning' : 'outline' ) ); ?>">
 								<?php echo \esc_html( $comp['interpretation_label'] ); ?>
 							</span>
 						</td>
@@ -799,8 +815,8 @@ $severity_badge_classes = array(
 	</section>
 
 	<!-- ======================================================================
-	     J. Profiling Session History
-	     ====================================================================== -->
+		J. Profiling Session History
+		====================================================================== -->
 	<section class="wpd-section">
 		<div class="wpd-section-header">
 			<h2 class="wpd-section-title"><?php \esc_html_e( 'Profiling Session History', 'wp-performance-doctor' ); ?></h2>
@@ -828,16 +844,16 @@ $severity_badge_classes = array(
 					</thead>
 					<tbody>
 					<?php foreach ( $sessions as $session ) : ?>
-					<?php
-					$s_status   = $session['status'] ?? 'completed';
-					$s_mode     = $session['mode'] ?? '';
-					$s_ctx      = $session['request_context'] ?? 'admin';
-					$s_status_class = 'wpd-status--' . \esc_attr( $s_status );
-					$s_status_label = \WPPerformanceDoctor\Admin\Formatter\MetricFormatter::session_status_label( $s_status );
-					$s_ctx_label = \WPPerformanceDoctor\Admin\Formatter\MetricFormatter::request_context_label( $s_ctx );
-					$s_mode_label = \WPPerformanceDoctor\Admin\Formatter\MetricFormatter::session_mode_label( $s_mode );
-					$s_id = (int) ( $session['id'] ?? 0 );
-					?>
+						<?php
+						$s_status       = $session['status'] ?? 'completed';
+						$s_mode         = $session['mode'] ?? '';
+						$s_ctx          = $session['request_context'] ?? 'admin';
+						$s_status_class = 'wpd-status--' . \esc_attr( $s_status );
+						$s_status_label = \WPPerformanceDoctor\Admin\Formatter\MetricFormatter::session_status_label( $s_status );
+						$s_ctx_label    = \WPPerformanceDoctor\Admin\Formatter\MetricFormatter::request_context_label( $s_ctx );
+						$s_mode_label   = \WPPerformanceDoctor\Admin\Formatter\MetricFormatter::session_mode_label( $s_mode );
+						$s_id           = (int) ( $session['id'] ?? 0 );
+						?>
 					<tr class="wpd-session-row" data-session-id="<?php echo \esc_attr( $s_id ); ?>" data-session-url="<?php echo \esc_attr( $session['target_url'] ?? '' ); ?>" data-session-context="<?php echo \esc_attr( $s_ctx ); ?>" data-session-mode="<?php echo \esc_attr( $s_mode ); ?>">
 						<td class="wpd-text--mono wpd-text--small">#<?php echo \esc_html( $s_id ); ?></td>
 						<td><?php echo \esc_html( $session['started_at'] ? MetricFormatter::format_date( $session['started_at'] ) : __( 'N/A', 'wp-performance-doctor' ) ); ?></td>

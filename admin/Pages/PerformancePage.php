@@ -325,7 +325,7 @@ final class PerformancePage {
 			}
 		}
 
-		$data['metrics'] = $metrics;
+		$data['metrics']  = $metrics;
 		$data['has_data'] = ! empty( $metrics );
 
 		// Normalize string 'null' values stored by older snapshots back to
@@ -336,44 +336,62 @@ final class PerformancePage {
 		}
 		unset( $metric );
 
-		// Re-key metrics by logical identifier so the analyzer and views can
-		// look them up. Metrics collected by the PerformanceCollector are
-		// stored under the 'performance' category with identifiers like
-		// `performance.php.memory_limit`. Strip that prefix so the analyzer
-		// (which expects `php.memory_limit`, `database.savequeries_enabled`,
-		// etc.) can find the corresponding server-collected values. Dedicated
-		// collector metrics (e.g. `system.memory_limit`) take precedence over
-		// prefixed duplicates.
-		$metrics_by_id = array();
+		// Build a canonical set of metrics: one row per logical identifier.
+		// The PerformanceCollector stores measurements under `performance.`
+		// prefixed identifiers (e.g. `performance.database.query_count`) while
+		// dedicated collectors store the same measurements without the prefix
+		// (e.g. `database.query_count`). Without dedup, the same logical
+		// measurement would appear twice across the interface. The canonical
+		// set keeps a single representative per logical identifier, preferring
+		// the dedicated collector's row over the prefixed duplicate, and for
+		// frontend browser metrics preferring the row that identifies the
+		// measured page.
+		$canonical_metrics = array();
 		foreach ( $metrics as $metric ) {
 			$identifier = $metric['metric_identifier'] ?? '';
 			if ( '' === $identifier ) {
 				continue;
 			}
-			$existing = $metrics_by_id[ $identifier ] ?? null;
-			// For frontend browser metrics, prefer a row that identifies the
-			// measured page (non-empty page_url) over one that does not, so
-			// duplicated rows for the same identifier do not lose context.
+			$is_prefixed = \str_starts_with( $identifier, 'performance.' );
+			$logical_id  = $is_prefixed ? \substr( $identifier, \strlen( 'performance.' ) ) : $identifier;
+			$existing    = $canonical_metrics[ $logical_id ] ?? null;
+			if ( ! $existing ) {
+				$canonical_metrics[ $logical_id ] = $metric;
+				continue;
+			}
+			$existing_prefixed = \str_starts_with( $existing['metric_identifier'] ?? '', 'performance.' );
+			if ( $is_prefixed && ! $existing_prefixed ) {
+				continue; // Keep the dedicated collector's version.
+			}
+			if ( ! $is_prefixed && $existing_prefixed ) {
+				$canonical_metrics[ $logical_id ] = $metric; // Dedicated wins.
+				continue;
+			}
+			// Same prefix status: prefer the row that identifies the measured
+			// page; if both (or neither) identify a page, prefer an available
+			// measured value over an unavailable/null one so the UI never
+			// displays "Not measured" when a real measurement exists.
 			$has_page_url   = ! empty( $metric['page_url'] ?? '' );
 			$existing_page  = ! empty( ( $existing['page_url'] ?? '' ) );
-			if ( ! $existing || ( $has_page_url && ! $existing_page ) ) {
-				$metrics_by_id[ $identifier ] = $metric;
-			}
-			if ( \str_starts_with( $identifier, 'performance.' ) ) {
-				$stripped = \substr( $identifier, \strlen( 'performance.' ) );
-				$existing_stripped = $metrics_by_id[ $stripped ] ?? null;
-				$has_stripped_page = ! empty( $metric['page_url'] ?? '' );
-				$existing_stripped_page = ! empty( ( $existing_stripped['page_url'] ?? '' ) );
-				if ( ! $existing_stripped || ( $has_stripped_page && ! $existing_stripped_page ) ) {
-					$metrics_by_id[ $stripped ] = $metric;
-				}
+			$metric_usable  = self::is_metric_usable( $metric );
+			$existing_usable = self::is_metric_usable( $existing );
+			if ( $has_page_url && ! $existing_page ) {
+				$canonical_metrics[ $logical_id ] = $metric;
+			} elseif ( $has_page_url === $existing_page && $metric_usable && ! $existing_usable ) {
+				$canonical_metrics[ $logical_id ] = $metric;
 			}
 		}
-		$data['metrics_by_id'] = $metrics_by_id;
+
+		$data['metrics']       = array_values( $canonical_metrics );
+		$data['has_data']      = ! empty( $data['metrics'] );
+		$data['metrics_by_id'] = $canonical_metrics;
+		$metrics_by_id         = $canonical_metrics;
 
 		// Group metrics for the Collected Metrics section by logical category
-		// (the segment before the first dot in the identifier).
-		$data['grouped_metrics'] = $this->group_metrics_by_logical_category( $metrics );
+		// (the segment before the first dot in the identifier). Uses the
+		// canonical set so no measurement appears under two different
+		// identifiers.
+		$data['grouped_metrics'] = $this->group_metrics_by_logical_category( $data['metrics'] );
 
 		// Run bottleneck analysis on the latest metrics keyed by identifier.
 		// The analyzer expects raw values for server metrics but full metric
@@ -503,6 +521,20 @@ final class PerformancePage {
 			return null;
 		}
 		return $value;
+	}
+
+	/**
+	 * Whether a metric row represents a usable (available, non-null) value.
+	 *
+	 * @param array $metric Stored metric row.
+	 * @return bool
+	 */
+	private static function is_metric_usable( array $metric ): bool {
+		if ( ! isset( $metric['availability_status'] ) || 'available' !== $metric['availability_status'] ) {
+			return false;
+		}
+		$value = self::normalize_null_string( $metric['metric_value'] ?? null );
+		return null !== $value && '' !== $value;
 	}
 
 	/**
@@ -638,8 +670,8 @@ final class PerformancePage {
 			// falling back to the profiling session when the metric row does
 			// not carry them. Empty strings are treated as missing so the
 			// fallback is applied.
-			$page_url   = ! empty( $metric['page_url'] ?? '' ) ? $metric['page_url'] : $target_url;
-			$context_r  = ! empty( $metric['measurement_context'] ?? '' ) ? $metric['measurement_context'] : $context;
+			$page_url  = ! empty( $metric['page_url'] ?? '' ) ? $metric['page_url'] : $target_url;
+			$context_r = ! empty( $metric['measurement_context'] ?? '' ) ? $metric['measurement_context'] : $context;
 
 			$metrics[] = array(
 				'identifier'    => $identifier,
@@ -745,6 +777,7 @@ final class PerformancePage {
 		$raw_comparisons   = $comparison['comparisons'] ?? array();
 
 		$comparisons = array();
+		$seen_ids    = array();
 		foreach ( $raw_comparisons as $comp ) {
 			// Only show valid, comparable metrics.
 			if ( empty( $comp['available'] ) ) {
@@ -758,11 +791,16 @@ final class PerformancePage {
 			if ( \in_array( $metric_id, self::COMPARISON_EXCLUDED_IDENTIFIERS, true ) ) {
 				continue;
 			}
-			// Strip the performance. prefix for consistent labeling.
+			// Strip the performance. prefix for consistent labeling and to
+			// avoid comparing two representations of the same measurement.
 			$label_id = $metric_id;
 			if ( \str_starts_with( $metric_id, 'performance.' ) ) {
 				$label_id = \substr( $metric_id, \strlen( 'performance.' ) );
 			}
+			if ( isset( $seen_ids[ $label_id ] ) ) {
+				continue; // Already represented by a canonical identifier.
+			}
+			$seen_ids[ $label_id ] = true;
 
 			$previous = $comp['previous'] ?? null;
 			$current  = $comp['current'] ?? null;
@@ -790,25 +828,27 @@ final class PerformancePage {
 				$interpretation_label = __( 'Worsened', 'wp-performance-doctor' );
 			}
 
-			// Format values using the metric's real availability. Both sides
-			// are available when `available` is true, but format defensively.
+			// Format values using the metric's real availability. The explicit
+			// previous/current values must win over the metrics_by_id row
+			// (which carries the current snapshot's value) so previous and
+			// current are displayed correctly.
 			$previous_metric = array_merge(
+				$metrics_by_id[ $metric_id ] ?? array(),
 				array(
 					'metric_identifier'   => $metric_id,
 					'metric_value'        => $previous,
 					'unit'                => $unit,
 					'availability_status' => 'available',
-				),
-				$metrics_by_id[ $metric_id ] ?? array()
+				)
 			);
-			$current_metric  = array_merge(
+			$current_metric = array_merge(
+				$metrics_by_id[ $label_id ] ?? $metrics_by_id[ $metric_id ] ?? array(),
 				array(
 					'metric_identifier'   => $metric_id,
 					'metric_value'        => $current,
 					'unit'                => $unit,
 					'availability_status' => 'available',
-				),
-				$metrics_by_id[ $label_id ] ?? $metrics_by_id[ $metric_id ] ?? array()
+				)
 			);
 
 			$comparisons[] = array(

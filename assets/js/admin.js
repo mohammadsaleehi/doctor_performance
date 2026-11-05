@@ -905,18 +905,31 @@
 		} catch ( e ) {}
 	}
 
-	var runProfileBtn        = document.getElementById( 'wpd-run-profile' );
-	var runProfileBtnEmpty   = document.getElementById( 'wpd-run-profile-empty' );
-	var runProfileLabel      = document.getElementById( 'wpd-run-profile-label' );
-	var perfNotice           = document.getElementById( 'wpd-performance-notice' );
+	var runProfileBtn    = document.getElementById( 'wpd-run-profile' );
+	var runProfileServer = document.getElementById( 'wpd-run-server-profile' );
+	var runProfileLabel  = document.getElementById( 'wpd-run-profile-label' );
+	var perfNotice       = document.getElementById( 'wpd-performance-notice' );
 
-	function runProfile() {
+	var profileInFlight = false;
+
+	function runProfile( btn ) {
+		if ( profileInFlight ) {
+			return;
+		}
 		if ( ! perfRestUrl || ! perfNonce ) {
 			return;
 		}
-		var btn = runProfileBtn || runProfileBtnEmpty;
-		var lbl = runProfileLabel;
-		setButtonLoading( btn, lbl, true, perfStrings, perfStrings );
+		profileInFlight = true;
+
+		var activeBtn = btn || runProfileBtn || runProfileServer;
+		var labelEl   = null;
+		if ( activeBtn ) {
+			labelEl = activeBtn.querySelector( '.wpd-button-label' );
+		} else if ( runProfileLabel ) {
+			labelEl = runProfileLabel;
+		}
+
+		setButtonLoading( activeBtn, labelEl, true, perfStrings, perfStrings );
 		showNotice( perfNotice, perfStrings.profiling || 'Profiling…', 'info' );
 
 		wpdFetch( perfRestUrl, 'POST', null, perfNonce )
@@ -929,7 +942,8 @@
 				return response.json();
 			} )
 			.then( function ( data ) {
-				setButtonLoading( btn, lbl, false, perfStrings, perfStrings );
+				setButtonLoading( activeBtn, labelEl, false, perfStrings, perfStrings );
+				profileInFlight = false;
 				var successMsg = perfStrings.complete || 'Profile complete.';
 				if ( data && data.snapshot_id ) {
 					successMsg = 'Profile complete. Snapshot #' + data.snapshot_id + ' created.';
@@ -938,17 +952,19 @@
 				setTimeout( function () { window.location.reload(); }, 800 );
 			} )
 			.catch( function ( err ) {
-				setButtonLoading( btn, lbl, false, perfStrings, perfStrings );
+				setButtonLoading( activeBtn, labelEl, false, perfStrings, perfStrings );
+				profileInFlight = false;
 				showNotice( perfNotice, err.message || perfStrings.error || 'Profiling failed.', 'error' );
 			} );
 	}
 
-	if ( runProfileBtn ) {
-		runProfileBtn.addEventListener( 'click', runProfile );
-	}
-	if ( runProfileBtnEmpty ) {
-		runProfileBtnEmpty.addEventListener( 'click', runProfile );
-	}
+	[ runProfileBtn, runProfileServer ].forEach( function ( b ) {
+		if ( b ) {
+			b.addEventListener( 'click', function () {
+				runProfile( b );
+			} );
+		}
+	} );
 
 	// --- Bottleneck steps modal ---
 
@@ -1019,10 +1035,14 @@
 
 	var perfSessionId   = document.getElementById( 'wpd-perf-session-id' );
 	var perfStartBtn    = document.getElementById( 'wpd-run-frontend-profile' );
+	var perfStartBtnEmpty = document.getElementById( 'wpd-run-frontend-profile-empty' );
 	var perfStartLabel  = document.getElementById( 'wpd-run-frontend-profile-label' );
+	var perfStartLabelEmpty = document.getElementById( 'wpd-run-frontend-profile-label-empty' );
 	var perfNotice      = document.getElementById( 'wpd-frontend-profile-notice' );
 	var perfBrowserUrl  = performance && performance.restBrowserUrl ? performance.restBrowserUrl : '';
 	var perfBrowserNonce = performance && performance.browserNonce ? performance.browserNonce : '';
+
+	var frontendInFlight = false;
 
 	// Read inline JSON config for browser metrics URL.
 	var browserConfigEl = document.getElementById( 'wpd-browser-metrics-config' );
@@ -1518,14 +1538,19 @@
 
 	// --- Frontend profile workflow ---
 
-	function runFrontendProfile() {
-		if ( ! perfBrowserUrl || ! perfBrowserNonce || ! perfStartBtn ) {
+	function runFrontendProfile( btn ) {
+		if ( frontendInFlight ) {
+			return;
+		}
+		if ( ! perfBrowserUrl || ! perfBrowserNonce ) {
 			return;
 		}
 
-		var sessionId = perfSessionId ? parseInt( perfSessionId.value, 10 ) : 0;
-		var snapshotId = document.getElementById( 'wpd-perf-snapshot-id' );
-		snapshotId = snapshotId ? parseInt( snapshotId.value, 10 ) : 0;
+		var isEmpty = btn && btn.id === 'wpd-run-frontend-profile-empty';
+		var sessionIdEl = isEmpty ? document.getElementById( 'wpd-perf-session-id-empty' ) : perfSessionId;
+		var snapshotIdEl = isEmpty ? document.getElementById( 'wpd-perf-snapshot-id-empty' ) : document.getElementById( 'wpd-perf-snapshot-id' );
+		var sessionId = sessionIdEl ? parseInt( sessionIdEl.value, 10 ) : 0;
+		var snapshotId = snapshotIdEl ? parseInt( snapshotIdEl.value, 10 ) : 0;
 		var targetUrlEl = document.getElementById( 'wpd-perf-target-url' );
 		var contextEl   = document.getElementById( 'wpd-perf-context' );
 		var targetUrl   = targetUrlEl ? targetUrlEl.value : '';
@@ -1536,8 +1561,10 @@
 			return;
 		}
 
-		setButtonLoading( perfStartBtn, perfStartLabel, true, {}, {} );
-		showNotice( perfNotice, 'Collecting browser metrics…', 'info' );
+		frontendInFlight = true;
+		var labelEl = btn ? btn.querySelector( '.wpd-button-label' ) : ( perfStartLabel || perfStartLabelEmpty );
+		setButtonLoading( btn || perfStartBtn || perfStartBtnEmpty, labelEl, true, {}, {} );
+		showNotice( perfNotice, perfStrings.collecting || 'Collecting browser metrics…', 'info' );
 
 		collectAllBrowserMetrics()
 			.then( function ( metrics ) {
@@ -1562,20 +1589,26 @@
 				return response.json();
 			} )
 			.then( function ( data ) {
-				setButtonLoading( perfStartBtn, perfStartLabel, false, {}, {} );
+				setButtonLoading( btn || perfStartBtn || perfStartBtnEmpty, labelEl, false, {}, {} );
+				frontendInFlight = false;
 				var msg = 'Browser metrics submitted (' + ( data.stored || 0 ) + ' metrics).';
-				showNotice( perfNotice, msg, 'success' );
+				showNotice( perfNotice, perfStrings.browserStored || msg, 'success' );
 				setTimeout( function () { window.location.reload(); }, 800 );
 			} )
 			.catch( function ( err ) {
-				setButtonLoading( perfStartBtn, perfStartLabel, false, {}, {} );
+				setButtonLoading( btn || perfStartBtn || perfStartBtnEmpty, labelEl, false, {}, {} );
+				frontendInFlight = false;
 				showNotice( perfNotice, err.message || 'Browser profiling failed.', 'error' );
 			} );
 	}
 
-	if ( perfStartBtn ) {
-		perfStartBtn.addEventListener( 'click', runFrontendProfile );
-	}
+	[ perfStartBtn, perfStartBtnEmpty ].forEach( function ( b ) {
+		if ( b ) {
+			b.addEventListener( 'click', function () {
+				runFrontendProfile( b );
+			} );
+		}
+	} );
 
 } )();
 

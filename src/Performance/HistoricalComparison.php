@@ -167,9 +167,14 @@ final class HistoricalComparison {
 
 		$previous_metrics = array();
 		if ( $previous ) {
+			// $previous is get_snapshot()'s wrapped result; the snapshot row
+			// lives under the 'snapshot' key.
+			$previous_snapshot_row = $previous['snapshot'] ?? null;
 			foreach ( $previous['metrics'] as $m ) {
 				$previous_metrics[ $m['metric_identifier'] ] = $m;
 			}
+		} else {
+			$previous_snapshot_row = null;
 		}
 
 		$current_metrics = array();
@@ -180,7 +185,7 @@ final class HistoricalComparison {
 		$comparisons = $this->compare( $previous_metrics, $current_metrics );
 
 		return array(
-			'previous_snapshot' => $previous,
+			'previous_snapshot' => $previous_snapshot_row,
 			'comparisons'       => $comparisons,
 		);
 	}
