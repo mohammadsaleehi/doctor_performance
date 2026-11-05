@@ -61,14 +61,16 @@ final class MetricTest extends TestCase
 		);
 
 		$expected = array(
-			'metric'       => 'test.metric',
-			'value'        => 'value',
-			'unit'         => 'unit',
-			'category'     => 'test',
-			'status'       => 'available',
-			'source'       => 'source',
-			'collected_at' => '2026-10-31 12:00:00',
-			'metadata'     => array(),
+			'metric'               => 'test.metric',
+			'value'                => 'value',
+			'unit'                 => 'unit',
+			'category'             => 'test',
+			'status'               => 'available',
+			'source'               => 'source',
+			'collected_at'         => '2026-10-31 12:00:00',
+			'metadata'             => array(),
+			'measurement_context'  => '',
+			'page_url'             => '',
 		);
 
 		$this->assertSame( $expected, $metric->to_array() );

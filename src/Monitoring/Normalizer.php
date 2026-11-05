@@ -33,14 +33,37 @@ final class Normalizer {
 	private $collected_at;
 
 	/**
+	 * Measurement context (frontend, admin, rest, ajax, cron).
+	 *
+	 * @var string
+	 */
+	private $measurement_context;
+
+	/**
+	 * Page URL where measurement was taken (for frontend context).
+	 *
+	 * @var string
+	 */
+	private $page_url;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param string $source        Collector/source name.
-	 * @param string $collected_at  ISO 8601 timestamp for all metrics.
+	 * @param string $source               Collector/source name.
+	 * @param string $collected_at         ISO 8601 timestamp for all metrics.
+	 * @param string $measurement_context  Measurement context.
+	 * @param string $page_url             Page URL where measurement was taken.
 	 */
-	public function __construct( string $source, string $collected_at = '' ) {
-		$this->source       = $source;
-		$this->collected_at = '' !== $collected_at ? $collected_at : gmdate( 'Y-m-d H:i:s' );
+	public function __construct(
+		string $source,
+		string $collected_at = '',
+		string $measurement_context = '',
+		string $page_url = ''
+	) {
+		$this->source              = $source;
+		$this->collected_at        = '' !== $collected_at ? $collected_at : gmdate( 'Y-m-d H:i:s' );
+		$this->measurement_context = $measurement_context;
+		$this->page_url            = $page_url;
 	}
 
 	/**
@@ -70,7 +93,10 @@ final class Normalizer {
 				$category,
 				$status,
 				$this->source,
-				$this->collected_at
+				$this->collected_at,
+				array(),
+				$this->measurement_context,
+				$this->page_url
 			);
 		}
 

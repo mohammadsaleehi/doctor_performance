@@ -11,6 +11,7 @@ use WPPerformanceDoctor\Admin\Pages\DashboardPage;
 use WPPerformanceDoctor\Admin\Pages\DiagnosticsPage;
 use WPPerformanceDoctor\Admin\Pages\HistoryPage;
 use WPPerformanceDoctor\Admin\Pages\MonitoringPage;
+use WPPerformanceDoctor\Admin\Pages\PerformancePage;
 use WPPerformanceDoctor\Admin\Pages\RecommendationsPage;
 use WPPerformanceDoctor\Admin\Pages\SettingsPage;
 use WPPerformanceDoctor\Diagnostics\DiagnosticService;
@@ -197,6 +198,23 @@ final class Menu {
 			array( $monitoring, 'render' )
 		);
 
+		// Performance page.
+		$performance = PerformancePage::get_instance();
+		if ( $this->monitoring_service ) {
+			$performance->set_service( $this->monitoring_service );
+		}
+		if ( $this->storage ) {
+			$performance->set_storage( $this->storage );
+		}
+		add_submenu_page(
+			self::PAGE_SLUG,
+			__( 'Performance', 'wp-performance-doctor' ),
+			__( 'Performance', 'wp-performance-doctor' ),
+			'manage_options',
+			'wp-performance-doctor-performance',
+			array( $performance, 'render' )
+		);
+
 		// Diagnostics page.
 		$diagnostics = DiagnosticsPage::get_instance();
 		if ( $this->diagnostic_service ) {
@@ -246,20 +264,6 @@ final class Menu {
 			'manage_options',
 			'wp-performance-doctor-history',
 			array( $history, 'render' )
-		);
-
-		// Settings page.
-		$settings = SettingsPage::get_instance();
-		if ( $this->monitoring_service ) {
-			$settings->set_service( $this->monitoring_service );
-		}
-		add_submenu_page(
-			self::PAGE_SLUG,
-			__( 'Settings', 'wp-performance-doctor' ),
-			__( 'Settings', 'wp-performance-doctor' ),
-			'manage_options',
-			'wp-performance-doctor-settings',
-			array( $settings, 'render' )
 		);
 	}
 }

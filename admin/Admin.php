@@ -180,6 +180,7 @@ final class Admin {
 		$plugin_pages = array(
 			'wp-performance-doctor',
 			'wp-performance-doctor-monitoring',
+			'wp-performance-doctor-performance',
 			'wp-performance-doctor-diagnostics',
 			'wp-performance-doctor-recommendations',
 			'wp-performance-doctor-history',
@@ -210,6 +211,47 @@ final class Admin {
 			$js_version,
 			true
 		);
+
+		// Localize JavaScript configuration for dashboard and diagnostics pages.
+		$collect_nonce = wp_create_nonce( 'wpd_collect' );
+		$rest_nonce    = wp_create_nonce( 'wp_rest' );
+
+		$dashboard_config = array(
+			'restUrl'     => \esc_url_raw( \rest_url( \WPPerformanceDoctor\REST\RestController::NAMESPACE . '/monitoring/collect' ) ),
+			'nonce'       => $collect_nonce,
+			'wpRestNonce' => $rest_nonce,
+			'strings'     => array(
+				'label'          => __( 'Collect Now', 'wp-performance-doctor' ),
+				'collecting'     => __( 'Collecting…', 'wp-performance-doctor' ),
+				'success'        => __( 'Collection complete.', 'wp-performance-doctor' ),
+				'error'          => __( 'Collection failed.', 'wp-performance-doctor' ),
+				'runDiagnostics' => __( 'Run Diagnostics', 'wp-performance-doctor' ),
+			),
+		);
+
+		$diagnostics_config = array(
+			'restUrl'     => \esc_url_raw( \rest_url( \WPPerformanceDoctor\REST\RestController::NAMESPACE . '/diagnostics/run' ) ),
+			'nonce'       => $collect_nonce,
+			'wpRestNonce' => $rest_nonce,
+			'strings'     => array(
+				'label'    => __( 'Run Diagnostics', 'wp-performance-doctor' ),
+				'running'  => __( 'Running diagnostics…', 'wp-performance-doctor' ),
+				'complete' => __( 'Diagnostics complete.', 'wp-performance-doctor' ),
+				'error'    => __( 'Diagnostics failed.', 'wp-performance-doctor' ),
+			),
+		);
+
+		wp_localize_script(
+			'wp-performance-doctor-admin',
+			'wpdDashboard',
+			$dashboard_config
+		);
+
+		wp_localize_script(
+			'wp-performance-doctor-admin',
+			'wpdDiagnostics',
+			$diagnostics_config
+		);
 	}
 }
 
@@ -219,7 +261,7 @@ final class Admin {
  * @param string $name Icon name.
  * @return string SVG markup.
  */
-function wpd_icon( $name ) : string {
+function wpd_icon( $name ): string {
 		$icons = array(
 			'server'    => '<svg class="wpd-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><rect x="2" y="3" width="20" height="2" rx="2"/><line x1="6" y1="21" x2="6" y2="23"/><line x1="10" y1="21" x2="10" y2="23"/><line x1="14" y1="21" x2="14" y2="23"/><line x1="18" y1="21" x2="18" y2="23"/></svg>',
 			'wordpress' => '<svg class="wpd-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>',
@@ -232,7 +274,7 @@ function wpd_icon( $name ) : string {
 		);
 
 		return $icons[ $name ] ?? $icons['activity'];
-	}
+}
 
 /**
  * Echo a value already escaped by MetricFormatter.
@@ -244,9 +286,9 @@ function wpd_icon( $name ) : string {
  * @param string $html Pre-escaped HTML string.
  * @return void
  */
-if ( ! function_exists( 'wpd_formatted_echo' ) ):
-function wpd_formatted_echo( $html): void {
-	// phpcs:ignore WordPress.Security.EscapeOutput -- Value is pre-escaped by MetricFormatter.
-	echo $html;
-}
+if ( ! function_exists( 'wpd_formatted_echo' ) ) :
+	function wpd_formatted_echo( $html ): void {
+		// phpcs:ignore WordPress.Security.EscapeOutput -- Value is pre-escaped by MetricFormatter.
+		echo $html;
+	}
 endif;

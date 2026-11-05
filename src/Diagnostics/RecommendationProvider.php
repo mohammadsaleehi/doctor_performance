@@ -64,8 +64,8 @@ final class RecommendationProvider {
 		$rule_id     = $finding['rule_id'] ?? '';
 		$category    = $finding['category'] ?? '';
 		$severity    = $finding['severity'] ?? 'info';
-		$evidence    = $finding['evidence'] ?? array();
-		$remediation = $finding['remediation'] ?? array();
+		$evidence    = $this->decode_json( $finding['evidence'] ?? '' );
+		$remediation = $this->decode_json( $finding['remediation'] ?? '' );
 
 		$difficulty = $remediation['difficulty'] ?? 'medium';
 		$risk       = $remediation['risk'] ?? 'low';
@@ -108,5 +108,22 @@ final class RecommendationProvider {
 			'info'     => __( 'Review for potential improvement.', 'wp-performance-doctor' ),
 			default    => __( 'Review for potential improvement.', 'wp-performance-doctor' ),
 		};
+	}
+
+	/**
+	 * Decode a JSON-encoded value safely.
+	 *
+	 * @param string|array $value JSON string or array.
+	 * @return array
+	 */
+	private function decode_json( $value ): array {
+		if ( is_array( $value ) ) {
+			return $value;
+		}
+		if ( ! is_string( $value ) || '' === $value ) {
+			return array();
+		}
+		$decoded = json_decode( $value, true );
+		return json_last_error() === JSON_ERROR_NONE && is_array( $decoded ) ? $decoded : array();
 	}
 }

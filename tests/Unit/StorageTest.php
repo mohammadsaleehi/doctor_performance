@@ -36,11 +36,11 @@ final class StorageTest extends TestCase
 	{
 		$this->assertSame( 'wp_wpd_monitoring_snapshots', \WPPerformanceDoctor\Monitoring\Schema::TABLE_SNAPSHOTS );
 		$this->assertSame( 'wp_wpd_monitoring_metrics', \WPPerformanceDoctor\Monitoring\Schema::TABLE_METRICS );
-		$this->assertSame( 2, \WPPerformanceDoctor\Monitoring\Schema::SCHEMA_VERSION );
+		$this->assertSame( 4, \WPPerformanceDoctor\Monitoring\Schema::SCHEMA_VERSION );
 	}
 
 	/**
-	 * Assert Schema get_tables() returns all tables including diagnostic tables.
+	 * Assert Schema get_tables() returns all tables including diagnostic and profiling tables.
 	 */
 	public function test_schema_get_tables(): void
 	{
@@ -51,7 +51,8 @@ final class StorageTest extends TestCase
 		$this->assertContains( \WPPerformanceDoctor\Monitoring\Schema::TABLE_DIAGNOSTIC_RUNS, $tables );
 		$this->assertContains( \WPPerformanceDoctor\Monitoring\Schema::TABLE_DIAGNOSTIC_FINDINGS, $tables );
 		$this->assertContains( \WPPerformanceDoctor\Monitoring\Schema::TABLE_FINDING_HISTORY, $tables );
-		$this->assertCount( 5, $tables );
+		$this->assertContains( \WPPerformanceDoctor\Monitoring\Schema::TABLE_PROFILING_SESSIONS, $tables );
+		$this->assertCount( 6, $tables );
 	}
 
 	/**

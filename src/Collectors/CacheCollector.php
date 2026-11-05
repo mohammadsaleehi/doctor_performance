@@ -31,29 +31,39 @@ final class CacheCollector implements CollectorInterface {
 	public function collect(): array {
 		$data = array();
 
-		// WordPress object cache.
-		$data['object_cache_available'] = wp_using_ext_object_cache();
-		$data['object_cache_type']      = null;
-		$data['object_cache_active']    = false;
+		// WordPress object cache is always active (built-in WP_Object_Cache).
+		// A persistent (external) object cache is only present when a drop-in
+		// replaces the built-in implementation.
+		$external_cache = wp_using_ext_object_cache();
 
 		global $wp_object_cache;
-		if ( isset( $wp_object_cache ) ) {
-			$class                       = get_class( $wp_object_cache );
-			$data['object_cache_type']   = $this->detect_cache_type( $class );
-			$data['object_cache_active'] = true;
+		$detected_type = 'none';
+		if ( $external_cache && isset( $wp_object_cache ) ) {
+			$detected_type = $this->detect_cache_type( get_class( $wp_object_cache ) );
+			if ( null === $detected_type ) {
+				$detected_type = 'unknown';
+			}
 		}
+
+		// WordPress object cache API (built-in, always active).
+		$data['object_cache_available'] = true;
+		$data['object_cache_active']    = true;
+		$data['object_cache_type']      = $detected_type;
+
+		// Persistent object cache (external backend such as Redis/Memcached).
+		$data['persistent_object_cache'] = $external_cache;
 
 		// Redis availability.
 		$data['redis_available'] = $this->check_redis();
 		$data['redis_active']    = false;
-		if ( $data['object_cache_active'] && is_string( $data['object_cache_type'] ) && $data['object_cache_type'] === 'redis' ) {
+		if ( $external_cache && is_string( $detected_type ) && $detected_type === 'redis' ) {
 			$data['redis_active'] = true;
 		}
 
 		// Memcached availability.
 		$data['memcached_available'] = $this->check_memcached();
 		$data['memcached_active']    = false;
-		if ( $data['object_cache_active'] && is_string( $data['object_cache_type'] ) && $data['object_cache_type'] === 'memcached' ) {
+		if ( $external_cache && is_string( $detected_type ) && $detected_type === 'memcached' ) {
 			$data['memcached_active'] = true;
 		}
 
@@ -69,7 +79,7 @@ final class CacheCollector implements CollectorInterface {
 		$data['transient_storage'] = $this->get_transient_storage_info();
 
 		// Cache configuration.
-		$data['cache_configured'] = $data['object_cache_available'] || $data['page_cache_detected'];
+		$data['cache_configured'] = $external_cache || ! empty( $data['page_cache_detected'] );
 
 		return $data;
 	}

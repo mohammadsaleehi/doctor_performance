@@ -13,6 +13,8 @@ use WPPerformanceDoctor\Diagnostics\RecommendationProvider;
 use WPPerformanceDoctor\Diagnostics\RuleRegistry;
 use WPPerformanceDoctor\Monitoring\Service;
 use WPPerformanceDoctor\Monitoring\Storage;
+use WPPerformanceDoctor\Performance\HistoricalComparison;
+use WPPerformanceDoctor\Performance\PerformanceAnalyzer;
 use WPPerformanceDoctor\Security\CapabilityManager;
 use WPPerformanceDoctor\Security\NonceManager;
 
@@ -454,6 +456,108 @@ final class RestController {
 				array(
 					'methods'             => \WP_REST_Server::READABLE,
 					'callback'            => array( $this, 'get_recommendations' ),
+					'permission_callback' => array( $this, 'check_permission' ),
+				),
+			)
+		);
+
+		// Performance profiling endpoints.
+		register_rest_route(
+			self::NAMESPACE,
+			'/performance/overview',
+			array(
+				array(
+					'methods'             => \WP_REST_Server::READABLE,
+					'callback'            => array( $this, 'get_performance_overview' ),
+					'permission_callback' => array( $this, 'check_permission' ),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			'/performance/profile',
+			array(
+				array(
+					'methods'             => \WP_REST_Server::CREATABLE,
+					'callback'            => array( $this, 'run_performance_profile' ),
+					'permission_callback' => array( $this, 'check_permission' ),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			'/performance/sessions',
+			array(
+				array(
+					'methods'             => \WP_REST_Server::READABLE,
+					'callback'            => array( $this, 'get_profiling_sessions' ),
+					'permission_callback' => array( $this, 'check_permission' ),
+					'args'                => array(
+						'page'     => array(
+							'type'    => 'integer',
+							'default' => 1,
+							'minimum' => 1,
+						),
+						'per_page' => array(
+							'type'    => 'integer',
+							'default' => 20,
+							'minimum' => 1,
+							'maximum' => 100,
+						),
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			'/performance/sessions/(?P<id>\d+)',
+			array(
+				array(
+					'methods'             => \WP_REST_Server::READABLE,
+					'callback'            => array( $this, 'get_profiling_session' ),
+					'permission_callback' => array( $this, 'check_permission' ),
+					'args'                => array(
+						'id' => array(
+							'type'     => 'integer',
+							'required' => true,
+						),
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			'/performance/compare',
+			array(
+				array(
+					'methods'             => \WP_REST_Server::READABLE,
+					'callback'            => array( $this, 'compare_performance' ),
+					'permission_callback' => array( $this, 'check_permission' ),
+					'args'                => array(
+						'previous' => array(
+							'type'     => 'integer',
+							'required' => false,
+						),
+						'current'  => array(
+							'type'     => 'integer',
+							'required' => false,
+						),
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			'/performance/browser-metrics',
+			array(
+				array(
+					'methods'             => \WP_REST_Server::CREATABLE,
+					'callback'            => array( $this, 'submit_browser_metrics' ),
 					'permission_callback' => array( $this, 'check_permission' ),
 				),
 			)
@@ -909,5 +1013,320 @@ final class RestController {
 		$recommendations = $provider->from_findings( $findings['items'] );
 
 		return rest_ensure_response( array( 'recommendations' => $recommendations ) );
+	}
+
+	// ========================================================================
+	// Performance Profiling Endpoints
+	// ========================================================================
+
+	/**
+	 * Get performance overview with latest metrics and bottlenecks.
+	 *
+	 * @return \WP_REST_Response
+	 */
+	public function get_performance_overview(): \WP_REST_Response {
+		$metrics     = $this->storage ? $this->storage->get_latest_metrics_by_category( 'performance' ) : array();
+		$sessions    = $this->storage ? $this->storage->get_profiling_sessions( 1, 5 ) : array(
+			'items' => array(),
+			'total' => 0,
+		);
+		$analyzer    = new PerformanceAnalyzer();
+		$bottlenecks = ! empty( $metrics ) ? $analyzer->analyze( $metrics ) : array();
+
+		return rest_ensure_response(
+			array(
+				'metrics'        => $metrics,
+				'sessions'       => $sessions['items'],
+				'sessions_total' => $sessions['total'],
+				'bottlenecks'    => $bottlenecks,
+				'has_data'       => ! empty( $metrics ),
+			)
+		);
+	}
+
+	/**
+	 * Run an on-demand performance profile.
+	 *
+	 * @param \WP_REST_Request $request Request object.
+	 * @return \WP_REST_Response|\WP_Error
+	 */
+	public function run_performance_profile( \WP_REST_Request $request ) {
+		$nonce = $request->get_param( 'wpd_nonce' );
+		if ( ! $nonce || ! $this->nonce_manager->verify( 'wpd_collect', $nonce ) ) {
+			return new \WP_Error(
+				'rest_invalid_nonce',
+				__( 'Invalid or missing nonce.', 'wp-performance-doctor' ),
+				array( 'status' => 403 )
+			);
+		}
+
+		if ( ! $this->service ) {
+			return new \WP_Error(
+				'rest_service_unavailable',
+				__( 'Monitoring service is not available.', 'wp-performance-doctor' ),
+				array( 'status' => 503 )
+			);
+		}
+
+		if ( ! $this->storage ) {
+			return new \WP_Error(
+				'rest_storage_unavailable',
+				__( 'Storage is not available.', 'wp-performance-doctor' ),
+				array( 'status' => 503 )
+			);
+		}
+
+		try {
+			$start_time = microtime( true );
+
+			// Use the monitoring service's collect method which now includes PerformanceCollector.
+			$snapshot_id = $this->service->collect( 'manual' );
+
+			if ( false === $snapshot_id ) {
+				return new \WP_Error(
+					'rest_profile_failed',
+					__( 'Performance profile could not be started.', 'wp-performance-doctor' ),
+					array( 'status' => 500 )
+				);
+			}
+
+			$duration = microtime( true ) - $start_time;
+
+			// Create a profiling session record.
+			$context = $this->get_request_context();
+			$session_id = $this->storage->create_profiling_session(
+				$snapshot_id,
+				'on_demand',
+				'manual',
+				$context
+			);
+
+			if ( false !== $session_id ) {
+				$this->storage->update_profiling_session(
+					$session_id,
+					array(
+						'completed_at'  => \current_time( 'mysql' ),
+						'status'        => 'completed',
+						'duration'      => $duration,
+						'metrics_count' => count( $this->storage->get_latest_metrics_by_category( 'performance', $snapshot_id ) ),
+					)
+				);
+			}
+
+			return rest_ensure_response(
+				array(
+					'snapshot_id' => $snapshot_id,
+					'status'      => 'completed',
+					'duration'    => $duration,
+				)
+			);
+		} finally {
+			\delete_transient( \WPPerformanceDoctor\Monitoring\Service::LOCK_TRANSIENT );
+		}
+	}
+
+	/**
+	 * Get paginated profiling sessions.
+	 *
+	 * @param \WP_REST_Request $request Request object.
+	 * @return \WP_REST_Response
+	 */
+	public function get_profiling_sessions( \WP_REST_Request $request ): \WP_REST_Response {
+		$page     = (int) $request->get_param( 'page' );
+		$per_page = (int) $request->get_param( 'per_page' );
+
+		$result = $this->storage ? $this->storage->get_profiling_sessions( $page, $per_page ) : array(
+			'items' => array(),
+			'total' => 0,
+		);
+
+		return rest_ensure_response(
+			array(
+				'sessions' => $result['items'],
+				'total'    => $result['total'],
+				'page'     => $page,
+				'per_page' => $per_page,
+			)
+		);
+	}
+
+	/**
+	 * Get a single profiling session.
+	 *
+	 * @param \WP_REST_Request $request Request object.
+	 * @return \WP_REST_Response|\WP_Error
+	 */
+	public function get_profiling_session( \WP_REST_Request $request ) {
+		$id = (int) $request->get_param( 'id' );
+
+		$data = $this->storage ? $this->storage->get_profiling_session( $id ) : null;
+
+		if ( null === $data ) {
+			return new \WP_Error(
+				'rest_session_not_found',
+				__( 'Profiling session not found.', 'wp-performance-doctor' ),
+				array( 'status' => 404 )
+			);
+		}
+
+		return rest_ensure_response( $data );
+	}
+
+	/**
+	 * Compare performance between two snapshots.
+	 *
+	 * @param \WP_REST_Request $request Request object.
+	 * @return \WP_REST_Response|\WP_Error
+	 */
+	public function compare_performance( \WP_REST_Request $request ) {
+		$current_id  = (int) $request->get_param( 'current' );
+		$previous_id = (int) $request->get_param( 'previous' );
+
+		if ( ! $current_id ) {
+			$current_id = $this->storage ? (int) ( $this->storage->get_latest_snapshot_id() ?? 0 ) : 0;
+		}
+
+		if ( ! $current_id || ! $previous_id ) {
+			return new \WP_Error(
+				'rest_invalid_parameter',
+				__( 'Both current and previous snapshot IDs are required.', 'wp-performance-doctor' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		if ( ! $this->storage ) {
+			return new \WP_Error(
+				'rest_storage_unavailable',
+				__( 'Storage is not available.', 'wp-performance-doctor' ),
+				array( 'status' => 503 )
+			);
+		}
+
+		$comparison = new HistoricalComparison();
+		$result     = $comparison->compare_with_historical( $this->storage, $current_id, $previous_id );
+
+		return rest_ensure_response( $result );
+	}
+
+	/**
+	 * Accept browser-collected performance metrics and associate them with a profiling session.
+	 *
+	 * Validates the session ID, verifies the nonce, and validates every submitted metric
+	 * against an explicit allowlist before storing.
+	 *
+	 * @param \WP_REST_Request $request Request object.
+	 * @return \WP_REST_Response|\WP_Error
+	 */
+	public function submit_browser_metrics( \WP_REST_Request $request ) {
+		$nonce = $request->get_param( 'wpd_nonce' );
+		if ( ! $nonce || ! $this->nonce_manager->verify( 'wpd_collect', $nonce ) ) {
+			return new \WP_Error(
+				'rest_invalid_nonce',
+				__( 'Invalid or missing nonce.', 'wp-performance-doctor' ),
+				array( 'status' => 403 )
+			);
+		}
+
+		$session_id = (int) $request->get_param( 'session_id' );
+		$snapshot_id = (int) $request->get_param( 'snapshot_id' );
+		$raw_metrics = $request->get_param( 'metrics' );
+
+		// Reject excessively large payloads before decoding.
+		if ( is_string( $raw_metrics ) && strlen( $raw_metrics ) > 512 * 1024 ) {
+			return new \WP_Error(
+				'rest_payload_too_large',
+				__( 'Submitted payload is too large.', 'wp-performance-doctor' ),
+				array( 'status' => 413 )
+			);
+		}
+
+		// Accept metrics either as an array (direct) or as a JSON-encoded
+		// string (when submitted via FormData from the browser).
+		if ( is_string( $raw_metrics ) && '' !== $raw_metrics ) {
+			$decoded = json_decode( $raw_metrics, true );
+			if ( json_last_error() === JSON_ERROR_NONE && is_array( $decoded ) ) {
+				$metrics = $decoded;
+			} else {
+				$metrics = array();
+			}
+		} elseif ( is_array( $raw_metrics ) ) {
+			$metrics = $raw_metrics;
+		} else {
+			$metrics = array();
+		}
+
+		if ( ! $session_id || ! $snapshot_id ) {
+			return new \WP_Error(
+				'rest_invalid_parameter',
+				__( 'session_id and snapshot_id are required.', 'wp-performance-doctor' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		if ( ! is_array( $metrics ) || empty( $metrics ) ) {
+			return new \WP_Error(
+				'rest_invalid_parameter',
+				__( 'metrics must be a non-empty array.', 'wp-performance-doctor' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		// Limit payload size.
+		if ( count( $metrics ) > 200 ) {
+			return new \WP_Error(
+				'rest_payload_too_large',
+				__( 'Too many metrics submitted. Maximum is 200.', 'wp-performance-doctor' ),
+				array( 'status' => 413 )
+			);
+		}
+
+		if ( ! $this->storage ) {
+			return new \WP_Error(
+				'rest_storage_unavailable',
+				__( 'Storage is not available.', 'wp-performance-doctor' ),
+				array( 'status' => 503 )
+			);
+		}
+
+		$stored = $this->storage->save_browser_metrics( $session_id, $metrics, (string) $snapshot_id );
+
+		if ( false === $stored ) {
+			return new \WP_Error(
+				'rest_session_not_found',
+				__( 'Profiling session not found.', 'wp-performance-doctor' ),
+				array( 'status' => 404 )
+			);
+		}
+
+		return rest_ensure_response(
+			array(
+				'success'   => true,
+				'stored'    => $stored,
+				'session_id' => $session_id,
+				'snapshot_id' => $snapshot_id,
+			)
+		);
+	}
+
+	/**
+	 * Get the request context for profiling sessions.
+	 *
+	 * @return string
+	 */
+	private function get_request_context(): string {
+		if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+			return 'rest';
+		}
+		if ( defined( 'DOING_AJAX' ) && DOING_AJAX ) {
+			return 'ajax';
+		}
+		if ( defined( 'DOING_CRON' ) && DOING_CRON ) {
+			return 'cron';
+		}
+		if ( is_admin() ) {
+			return 'admin';
+		}
+
+		return 'frontend';
 	}
 }

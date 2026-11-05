@@ -190,13 +190,9 @@ final class DiagnosticService {
 		$raw_findings = $engine_result['findings'];
 
 		// Deduplicate against existing open findings (don't re-insert same fingerprint).
-		$existing_fingerprints = $this->get_existing_open_fingerprints();
-		$new_findings          = array();
-		foreach ( $raw_findings as $finding ) {
-			if ( ! in_array( $finding->fingerprint, $existing_fingerprints, true ) ) {
-				$new_findings[] = $finding;
-			}
-		}
+		// save_diagnostic_findings() handles deduplication internally and updates
+		// provenance (run_id, snapshot_id, last_detected) for re-detected findings.
+		$new_findings = $raw_findings;
 
 		// Persist findings.
 		$save_result = $this->storage->save_diagnostic_findings( $run_id, $new_findings );
@@ -255,7 +251,8 @@ final class DiagnosticService {
 				'rules_errored'   => $engine_result['rules_errored'],
 				'total_rules'     => $engine_result['total_rules'],
 				'findings_count'  => count( $raw_findings ),
-				'new_findings'    => count( $new_findings ),
+				'new_findings'    => $save_result['inserted'],
+				'updated_findings' => $save_result['updated'],
 				'resolved_count'  => $resolved_count,
 				'severity_counts' => $severity_counts,
 				'health_score'    => $health_score,
@@ -264,27 +261,6 @@ final class DiagnosticService {
 			),
 			'error'   => null,
 		);
-	}
-
-	/**
-	 * Get fingerprints of currently open findings for deduplication.
-	 *
-	 * @return string[]
-	 */
-	private function get_existing_open_fingerprints(): array {
-		global $wpdb;
-
-		$table = $wpdb->prefix . 'wpd_diagnostic_findings';
-		if ( ! preg_match( '/^[a-z0-9_]+$/', $table ) ) {
-			return array();
-		}
-
-		$rows = $wpdb->get_col(
-			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $table validated via preg_match above.
-			$wpdb->prepare( 'SELECT fingerprint FROM ' . $table . ' WHERE status = %s', RuleStatus::OPEN )
-		);
-
-		return $rows ? array_map( 'strval', $rows ) : array();
 	}
 
 	/**

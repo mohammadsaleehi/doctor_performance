@@ -17,8 +17,9 @@ final class Schema {
 	public const TABLE_DIAGNOSTIC_RUNS     = 'wp_wpd_diagnostic_runs';
 	public const TABLE_DIAGNOSTIC_FINDINGS = 'wp_wpd_diagnostic_findings';
 	public const TABLE_FINDING_HISTORY     = 'wp_wpd_finding_history';
+	public const TABLE_PROFILING_SESSIONS  = 'wp_wpd_profiling_sessions';
 
-	public const SCHEMA_VERSION = 2;
+	public const SCHEMA_VERSION = 4;
 
 	/**
 	 * Get all table names.
@@ -32,6 +33,7 @@ final class Schema {
 			self::TABLE_DIAGNOSTIC_RUNS,
 			self::TABLE_DIAGNOSTIC_FINDINGS,
 			self::TABLE_FINDING_HISTORY,
+			self::TABLE_PROFILING_SESSIONS,
 		);
 	}
 
@@ -82,6 +84,8 @@ final class Schema {
 			source varchar(50) NOT NULL DEFAULT '',
 			collected_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
 			metadata longtext NOT NULL,
+			page_url varchar(500) DEFAULT NULL,
+			measurement_context varchar(20) DEFAULT NULL,
 			PRIMARY KEY (id),
 			KEY snapshot_id (snapshot_id),
 			KEY metric_identifier (metric_identifier),
@@ -192,6 +196,39 @@ final class Schema {
 			PRIMARY KEY (id),
 			KEY finding_id (finding_id),
 			KEY created_at (created_at)
+		) {$charset_collate}";
+	}
+
+	/**
+	 * Get the CREATE TABLE SQL for profiling sessions.
+	 *
+	 * @return string
+	 */
+	public static function get_profiling_sessions_sql(): string {
+		global $wpdb;
+
+		$table           = $wpdb->prefix . 'wpd_profiling_sessions';
+		$charset_collate = $wpdb->get_charset_collate();
+
+		return "CREATE TABLE {$table} (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			snapshot_id bigint(20) unsigned DEFAULT NULL,
+			mode varchar(20) NOT NULL DEFAULT 'passive',
+			trigger_type varchar(20) NOT NULL DEFAULT 'manual',
+			started_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+			completed_at datetime DEFAULT NULL,
+			status varchar(20) NOT NULL DEFAULT 'running',
+			duration float NOT NULL DEFAULT 0,
+			request_context varchar(20) DEFAULT NULL,
+			metrics_count int(11) NOT NULL DEFAULT 0,
+			overhead_warning text DEFAULT NULL,
+			target_url varchar(500) DEFAULT NULL,
+			measurement_context varchar(20) DEFAULT NULL,
+			PRIMARY KEY (id),
+			KEY snapshot_id (snapshot_id),
+			KEY mode (mode),
+			KEY status (status),
+			KEY started_at (started_at)
 		) {$charset_collate}";
 	}
 }

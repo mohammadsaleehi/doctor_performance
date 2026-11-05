@@ -60,19 +60,27 @@ final class DatabaseCollector implements CollectorInterface {
 		}
 
 		// Autoloaded options size and count.
+		// WordPress autoload semantics vary by version. Current core treats
+		// 'yes', 'on', 'auto-on' and 'auto' as autoloaded (see
+		// wp_autoload_values_to_autoload()). Querying only autoload = 'yes'
+		// under-reports on installations that use 'on'/'auto'.
 		$data['autoloaded_options_size']  = null;
 		$data['autoloaded_options_count'] = null;
 		if ( method_exists( $wpdb, 'get_var' ) ) {
-			$autoload_size                   = $wpdb->get_var(
+			$autoload_values = array( 'yes', 'on', 'auto-on', 'auto' );
+			$placeholders    = implode( ',', array_fill( 0, count( $autoload_values ), '%s' ) );
+			$autoload_size   = $wpdb->get_var(
 				$wpdb->prepare(
-					"SELECT SUM(LENGTH(option_value)) FROM {$wpdb->options} WHERE autoload = 'yes'"
+					"SELECT SUM(LENGTH(option_value)) FROM {$wpdb->options} WHERE autoload IN ( {$placeholders} )",
+					$autoload_values
 				)
 			);
 			$data['autoloaded_options_size'] = $autoload_size ? (int) $autoload_size : 0;
 
-			$autoload_count                   = $wpdb->get_var(
+			$autoload_count = $wpdb->get_var(
 				$wpdb->prepare(
-					"SELECT COUNT(*) FROM {$wpdb->options} WHERE autoload = 'yes'"
+					"SELECT COUNT(*) FROM {$wpdb->options} WHERE autoload IN ( {$placeholders} )",
+					$autoload_values
 				)
 			);
 			$data['autoloaded_options_count'] = $autoload_count ? (int) $autoload_count : 0;

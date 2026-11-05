@@ -170,3 +170,28 @@ if ( ! function_exists( 'sanitize_title_with_dashes' ) ) {
 	}
 }
 
+if ( ! defined( 'ARRAY_A' ) ) {
+	define( 'ARRAY_A', 'ARRAY_A' );
+}
+if ( ! defined( 'ARRAY_N' ) ) {
+	define( 'ARRAY_N', 'ARRAY_N' );
+}
+if ( ! defined( 'OBJECT' ) ) {
+	define( 'OBJECT', 'OBJECT' );
+}
+if ( ! defined( 'OBJECT_K' ) ) {
+	define( 'OBJECT_K', 'OBJECT_K' );
+}
+if ( ! defined( 'ABSPATH' ) ) {
+	define( 'ABSPATH', '' );
+}
+
+if ( ! function_exists( 'current_time' ) ) {
+	function current_time( $type = 'timestamp', $gmt = null ) {
+		if ( 'mysql' === $type ) {
+			return gmdate( 'Y-m-d H:i:s' );
+		}
+		return time();
+	}
+}
+

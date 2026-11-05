@@ -14,6 +14,8 @@ use WPPerformanceDoctor\Diagnostics\DiagnosticService;
 use WPPerformanceDoctor\Diagnostics\HealthScoreCalculator;
 use WPPerformanceDoctor\Diagnostics\RecommendationProvider;
 use WPPerformanceDoctor\Diagnostics\RuleRegistry;
+use WPPerformanceDoctor\Performance\HistoricalComparison;
+use WPPerformanceDoctor\Performance\PerformanceAnalyzer;
 use WPPerformanceDoctor\Rules\Cache\CachePluginRule;
 use WPPerformanceDoctor\Rules\Cache\MemcachedRule;
 use WPPerformanceDoctor\Rules\Cache\ObjectCacheRule;
@@ -143,6 +145,13 @@ final class Plugin {
 	private ?RecommendationProvider $recommendation_provider = null;
 
 	/**
+	 * Performance analyzer.
+	 *
+	 * @var PerformanceAnalyzer|null
+	 */
+	private ?PerformanceAnalyzer $performance_analyzer = null;
+
+	/**
 	 * Constructor.
 	 */
 	private function __construct() {
@@ -169,6 +178,8 @@ final class Plugin {
 
 		$this->health_score_calculator = new HealthScoreCalculator();
 		$this->recommendation_provider = new RecommendationProvider();
+
+		$this->performance_analyzer = new PerformanceAnalyzer();
 
 		$this->diagnostic_service = new DiagnosticService(
 			$this->rule_registry,
@@ -338,6 +349,15 @@ final class Plugin {
 	}
 
 	/**
+	 * Get the performance analyzer.
+	 *
+	 * @return PerformanceAnalyzer|null
+	 */
+	public function performance_analyzer(): ?PerformanceAnalyzer {
+		return $this->performance_analyzer;
+	}
+
+	/**
 	 * Initialize the plugin.
 	 */
 	public function init(): void {
@@ -352,6 +372,10 @@ final class Plugin {
 	 * Register core hooks.
 	 */
 	private function register_hooks(): void {
+		// Register custom WP-Cron schedule on plugins_loaded so it is available
+		// before WordPress processes any scheduled events on this request.
+		add_action( 'plugins_loaded', array( $this, 'register_cron_schedules' ) );
+
 		// Install monitoring schema on activation/init.
 		add_action( 'init', array( $this, 'ensure_monitoring_schema' ) );
 
@@ -377,6 +401,9 @@ final class Plugin {
 		if ( $this->monitoring_service && $this->monitoring_service->is_enabled() ) {
 			$profiler_collector = new \WPPerformanceDoctor\Collectors\PhpProfilerCollector();
 			$profiler_collector->register_hooks();
+
+			// PerformanceCollector is instantiated on-demand during collection;
+			// no persistent hooks are needed for passive mode.
 		}
 	}
 
@@ -389,6 +416,31 @@ final class Plugin {
 		if ( $this->storage && ! $this->storage->is_schema_installed() ) {
 			$this->storage->install_schema();
 		}
+	}
+
+	/**
+	 * Register custom WP-Cron schedule on plugins_loaded.
+	 *
+	 * Registers the cron_schedules filter early so the custom monitoring
+	 * interval schedule exists before WordPress processes scheduled events.
+	 *
+	 * @return void
+	 */
+	public function register_cron_schedules(): void {
+		if ( ! $this->monitoring_service || ! $this->monitoring_service->is_enabled() ) {
+			return;
+		}
+
+		add_filter(
+			'cron_schedules',
+			function ( $schedules ) {
+				$schedules['wpd_monitoring_interval'] = array(
+					'interval' => $this->monitoring_service->get_interval(),
+					'display'  => __( 'WP Performance Doctor Monitoring', 'wp-performance-doctor' ),
+				);
+				return $schedules;
+			}
+		);
 	}
 
 	/**

@@ -10,6 +10,7 @@ namespace WPPerformanceDoctor\Tests\Unit;
 use WPPerformanceDoctor\Collectors\CacheCollector;
 use WPPerformanceDoctor\Collectors\DatabaseCollector;
 use WPPerformanceDoctor\Collectors\FrontendCollector;
+use WPPerformanceDoctor\Collectors\PerformanceCollector;
 use WPPerformanceDoctor\Collectors\PhpProfilerCollector;
 use WPPerformanceDoctor\Collectors\SystemCollector;
 use WPPerformanceDoctor\Collectors\WordPressCollector;
@@ -95,6 +96,16 @@ final class CollectorTest extends TestCase
 	}
 
 	/**
+	 * Assert PerformanceCollector class exists and has correct ID.
+	 */
+	public function test_performance_collector_id(): void
+	{
+		$collector = new PerformanceCollector();
+		$this->assertSame( 'performance', $collector->get_id() );
+		$this->assertInstanceOf( \WPPerformanceDoctor\Contracts\CollectorInterface::class, $collector );
+	}
+
+	/**
 	 * Assert all collectors implement CollectorInterface.
 	 */
 	public function test_all_collectors_implement_interface(): void
@@ -106,6 +117,7 @@ final class CollectorTest extends TestCase
 			new CacheCollector(),
 			new PhpProfilerCollector(),
 			new FrontendCollector(),
+			new PerformanceCollector(),
 		);
 
 		foreach ( $collectors as $collector ) {

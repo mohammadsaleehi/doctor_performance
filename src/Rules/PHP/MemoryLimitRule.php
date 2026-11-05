@@ -19,16 +19,16 @@ use WPPerformanceDoctor\Rules\Severity;
  * Checks system.memory_limit. memory_limit = -1 (unlimited) is not treated
  * as zero or unavailable.
  */
-final class MemoryLimitRule extends AbstractRule {
+	final class MemoryLimitRule extends AbstractRule {
 
 	public function __construct() {
 		parent::__construct(
 			array(
 				'id'               => 'system.php_memory_limit',
-				'title'            => __( 'PHP Memory Limit Is Too Low', 'wp-performance-doctor' ),
-				'description'      => __( 'The configured PHP memory limit may be insufficient for WordPress operations.', 'wp-performance-doctor' ),
+				'title'            => __( 'PHP Memory Limit Below Recommended Threshold', 'wp-performance-doctor' ),
+				'description'      => __( 'The configured PHP memory limit is below the recommended minimum of 256 MB. This is a configuration recommendation, not evidence of an actual memory failure. Actual memory pressure should be assessed using memory usage metrics.', 'wp-performance-doctor' ),
 				'category'         => RuleCategory::SYSTEM,
-				'severity'         => Severity::HIGH,
+				'severity'         => Severity::MEDIUM,
 				'confidence'       => 'high',
 				'version'          => '1.0.0',
 				'required_metrics' => array( 'system.memory_limit' ),
@@ -68,9 +68,10 @@ final class MemoryLimitRule extends AbstractRule {
 
 		if ( $limit_mb < $min_mb ) {
 			return $this->result_fail(
-				__( 'PHP Memory Limit Is Too Low', 'wp-performance-doctor' ),
+				__( 'PHP Memory Limit Below Recommended Threshold', 'wp-performance-doctor' ),
 				sprintf(
-					__( 'PHP memory limit is %1$d MB, below the recommended %2$d MB.', 'wp-performance-doctor' ),
+					/* translators: 1 is the measured PHP memory limit in MB, 2 is the recommended minimum in MB. */
+					__( 'PHP memory limit is %1$d MB, below the recommended %2$d MB minimum.', 'wp-performance-doctor' ),
 					$limit_mb,
 					$min_mb
 				),
@@ -80,13 +81,14 @@ final class MemoryLimitRule extends AbstractRule {
 					'unit'           => 'MB',
 					'raw_value'      => $raw['value'] ?? null,
 				),
-				__( 'WordPress may fail to perform memory-intensive operations such as updates, imports, or bulk operations.', 'wp-performance-doctor' ),
+				__( 'This is a configuration recommendation. PHP memory_limit below 256 MB may limit memory-intensive WordPress operations, but does not by itself indicate a performance failure. Actual memory usage should be assessed separately.', 'wp-performance-doctor' ),
 				__( 'Increase the PHP memory_limit to at least 256M if your hosting environment permits it.', 'wp-performance-doctor' ),
 				array(
 					'steps'                  => array(
 						__( 'Edit php.ini or .user.ini and set memory_limit = 256M.', 'wp-performance-doctor' ),
 						__( 'Or contact your hosting provider to increase the memory limit.', 'wp-performance-doctor' ),
 						__( 'Avoid setting WP_MEMORY_LIMIT in wp-config.php as a substitute for server-level configuration.', 'wp-performance-doctor' ),
+						__( 'Review system.peak_memory_usage to determine whether the site is approaching its limit.', 'wp-performance-doctor' ),
 					),
 					'risk'                   => 'low',
 					'requires_manual_action' => true,
@@ -96,7 +98,8 @@ final class MemoryLimitRule extends AbstractRule {
 		}
 
 		return $this->result_pass(
-			__( 'PHP Memory Limit Is Adequate', 'wp-performance-doctor' ),
+			__( 'PHP Memory Limit Meets Recommended Minimum', 'wp-performance-doctor' ),
+			/* translators: %d is the measured PHP memory limit in MB. */
 			sprintf(
 				__( 'PHP memory limit is %d MB, meeting the recommended minimum.', 'wp-performance-doctor' ),
 				$limit_mb

@@ -9,6 +9,7 @@ namespace WPPerformanceDoctor\Tests\Unit\Rules;
 
 use WPPerformanceDoctor\Diagnostics\DiagnosticContext;
 use WPPerformanceDoctor\Rules\PHP\MemoryLimitRule;
+use WPPerformanceDoctor\Rules\Severity;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -28,7 +29,7 @@ final class MemoryLimitRuleTest extends TestCase {
 	 * Rule passes when memory limit is at or above recommended minimum.
 	 */
 	public function test_memory_limit_adequate(): void {
-		$rule = new MemoryLimitRule();
+		$rule    = new MemoryLimitRule();
 		$metrics = array(
 			array(
 				'metric_identifier'   => 'system.memory_limit',
@@ -60,7 +61,7 @@ final class MemoryLimitRuleTest extends TestCase {
 	 * Rule fails when memory limit is below recommended minimum.
 	 */
 	public function test_memory_limit_too_low(): void {
-		$rule = new MemoryLimitRule();
+		$rule    = new MemoryLimitRule();
 		$metrics = array(
 			array(
 				'metric_identifier'   => 'system.memory_limit',
@@ -86,7 +87,7 @@ final class MemoryLimitRuleTest extends TestCase {
 		$context = $this->makeContext( $metrics );
 		$result  = $rule->evaluate( $context );
 		$this->assertSame( 'fail', $result->outcome );
-		$this->assertSame( 'high', $result->severity );
+		$this->assertSame( 'medium', $result->severity );
 		$this->assertNotNull( $result->fingerprint );
 	}
 
@@ -94,7 +95,7 @@ final class MemoryLimitRuleTest extends TestCase {
 	 * Rule passes when memory limit is unlimited (-1 stored as null).
 	 */
 	public function test_memory_limit_unlimited(): void {
-		$rule = new MemoryLimitRule();
+		$rule    = new MemoryLimitRule();
 		$metrics = array(
 			array(
 				'metric_identifier'   => 'system.memory_limit',
@@ -126,7 +127,7 @@ final class MemoryLimitRuleTest extends TestCase {
 	 * Rule returns unavailable when metric is missing.
 	 */
 	public function test_memory_limit_missing_metric(): void {
-		$rule = new MemoryLimitRule();
+		$rule    = new MemoryLimitRule();
 		$context = new DiagnosticContext( array() );
 		$result  = $rule->evaluate( $context );
 		$this->assertSame( 'unavailable', $result->outcome );
@@ -140,8 +141,63 @@ final class MemoryLimitRuleTest extends TestCase {
 		$rule = new MemoryLimitRule();
 		$this->assertSame( 'system.php_memory_limit', $rule->get_id() );
 		$this->assertSame( 'system', $rule->get_category() );
-		$this->assertSame( 'high', $rule->get_severity() );
+		$this->assertSame( 'medium', $rule->get_severity() );
 		$this->assertTrue( $rule->is_enabled() );
 		$this->assertContains( 'system.memory_limit', $rule->get_required_metrics() );
+	}
+
+	/**
+	 * Severity is MEDIUM (configuration recommendation), not HIGH (confirmed problem).
+	 */
+	public function test_severity_is_medium_not_high(): void {
+		$rule = new MemoryLimitRule();
+		$this->assertSame( Severity::MEDIUM, $rule->get_severity() );
+		$this->assertNotSame( Severity::HIGH, $rule->get_severity() );
+	}
+
+	/**
+	 * Description clarifies this is a configuration recommendation.
+	 */
+	public function test_description_is_configuration_recommendation(): void {
+		$rule        = new MemoryLimitRule();
+		$description = $rule->get_description();
+		$this->assertStringContainsString( 'configuration recommendation', $description );
+		$this->assertStringContainsString( 'not evidence', $description );
+	}
+
+	/**
+	 * Impact text does not claim actual memory failure.
+	 */
+	public function test_impact_does_not_claim_actual_failure(): void {
+		$rule    = new MemoryLimitRule();
+		$metrics = array(
+			array(
+				'metric_identifier'   => 'system.memory_limit',
+				'metric_value'        => 67108864, // 64 MB
+				'unit'                => 'bytes',
+				'availability_status' => 'available',
+				'category'            => 'system',
+				'source'              => 'system',
+				'collected_at'        => '2026-10-31 12:00:00',
+				'metadata'            => '{}',
+			),
+			array(
+				'metric_identifier'   => 'system.memory_limit_raw',
+				'metric_value'        => '64M',
+				'unit'                => 'string',
+				'availability_status' => 'available',
+				'category'            => 'system',
+				'source'              => 'system',
+				'collected_at'        => '2026-10-31 12:00:00',
+				'metadata'            => '{}',
+			),
+		);
+		$context = $this->makeContext( $metrics );
+		$result  = $rule->evaluate( $context );
+		$this->assertSame( 'fail', $result->outcome );
+		// Impact should not claim actual memory exhaustion.
+		$this->assertStringNotContainsString( 'exhaustion', $result->impact );
+		$this->assertStringNotContainsString( 'will fail', $result->impact );
+		$this->assertStringContainsString( 'configuration recommendation', $result->impact );
 	}
 }

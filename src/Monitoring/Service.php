@@ -10,6 +10,7 @@ namespace WPPerformanceDoctor\Monitoring;
 use WPPerformanceDoctor\Collectors\CacheCollector;
 use WPPerformanceDoctor\Collectors\DatabaseCollector;
 use WPPerformanceDoctor\Collectors\FrontendCollector;
+use WPPerformanceDoctor\Collectors\PerformanceCollector;
 use WPPerformanceDoctor\Collectors\PhpProfilerCollector;
 use WPPerformanceDoctor\Collectors\SystemCollector;
 use WPPerformanceDoctor\Collectors\WordPressCollector;
@@ -149,8 +150,11 @@ final class Service {
 		);
 
 		// Schedule the collection event if not already scheduled.
+		// Use time() + interval so the first run is genuinely in the future.
+		// Scheduling at time() would make the event due immediately, causing
+		// "Next Collection" to match the last collection timestamp.
 		if ( ! \wp_next_scheduled( self::CRON_HOOK ) ) {
-			\wp_schedule_event( time(), 'wpd_monitoring_interval', self::CRON_HOOK );
+			\wp_schedule_event( time() + $this->interval, 'wpd_monitoring_interval', self::CRON_HOOK );
 		}
 	}
 
@@ -210,6 +214,7 @@ final class Service {
 			new WordPressCollector(),
 			new DatabaseCollector(),
 			new CacheCollector(),
+			new PerformanceCollector(),
 			new PhpProfilerCollector(),
 			new FrontendCollector(),
 		);
@@ -224,9 +229,9 @@ final class Service {
 				// Build schema based on collector type.
 				$schema = $this->get_schema_for_collector( $collector->get_id() );
 
-				$metrics     = $normalizer->normalize( $collector->get_id(), $raw_data, $schema );
+				$metrics = $normalizer->normalize( $collector->get_id(), $raw_data, $schema );
 				// Report expected-but-missing metrics as unavailable.
-				$missing = $normalizer->missing_metrics(
+				$missing     = $normalizer->missing_metrics(
 					$collector->get_id(),
 					array_keys( $schema ),
 					$raw_data
@@ -301,6 +306,10 @@ final class Service {
 					'unit'   => 'bytes',
 					'status' => 'unavailable',
 				),
+				'disk_total_space'   => array(
+					'unit'   => 'bytes',
+					'status' => 'available',
+				),
 			),
 			'wordpress'    => array(
 				'wordpress_version'      => array(
@@ -351,21 +360,41 @@ final class Service {
 				),
 			),
 			'cache'        => array(
-				'object_cache_available' => array(
+				'object_cache_available'  => array(
 					'unit'   => 'boolean',
 					'status' => 'available',
 				),
-				'opcache_enabled'        => array(
+				'object_cache_active'     => array(
 					'unit'   => 'boolean',
 					'status' => 'available',
 				),
-				'redis_available'        => array(
+				'persistent_object_cache' => array(
+					'unit'   => 'boolean',
+					'status' => 'available',
+				),
+				'object_cache_type'       => array(
+					'unit'   => 'string',
+					'status' => 'available',
+				),
+				'opcache_enabled'         => array(
+					'unit'   => 'boolean',
+					'status' => 'available',
+				),
+				'redis_available'         => array(
 					'unit'   => 'boolean',
 					'status' => 'unavailable',
 				),
-				'memcached_available'    => array(
+				'redis_active'            => array(
+					'unit'   => 'boolean',
+					'status' => 'available',
+				),
+				'memcached_available'     => array(
 					'unit'   => 'boolean',
 					'status' => 'unavailable',
+				),
+				'memcached_active'        => array(
+					'unit'   => 'boolean',
+					'status' => 'available',
 				),
 			),
 			'php_profiler' => array(
@@ -413,6 +442,116 @@ final class Service {
 				),
 				'total_assets'         => array(
 					'unit'   => 'count',
+					'status' => 'available',
+				),
+			),
+			'performance'  => array(
+				'php.memory_limit'               => array(
+					'unit'   => 'bytes',
+					'status' => 'available',
+				),
+				'php.memory_limit_raw'           => array(
+					'unit'   => 'string',
+					'status' => 'available',
+				),
+				'php.max_execution_time'         => array(
+					'unit'   => 'seconds',
+					'status' => 'available',
+				),
+				'php.memory_usage'               => array(
+					'unit'   => 'bytes',
+					'status' => 'available',
+				),
+				'php.peak_memory_usage'          => array(
+					'unit'   => 'bytes',
+					'status' => 'available',
+				),
+				'php.request_time_float'         => array(
+					'unit'   => 'float',
+					'status' => 'available',
+				),
+				'php.sapi'                       => array(
+					'unit'   => 'string',
+					'status' => 'available',
+				),
+				'php.version'                    => array(
+					'unit'   => 'string',
+					'status' => 'available',
+				),
+				'php.opcache_available'          => array(
+					'unit'   => 'boolean',
+					'status' => 'available',
+				),
+				'php.opcache_enabled'            => array(
+					'unit'   => 'boolean',
+					'status' => 'available',
+				),
+				'php.opcache_memory_consumption' => array(
+					'unit'   => 'bytes',
+					'status' => 'unavailable',
+				),
+				'php.opcache_used_memory'        => array(
+					'unit'   => 'bytes',
+					'status' => 'unavailable',
+				),
+				'php.opcache_free_memory'        => array(
+					'unit'   => 'bytes',
+					'status' => 'unavailable',
+				),
+				'php.opcache_hit_rate'           => array(
+					'unit'   => 'float',
+					'status' => 'unavailable',
+				),
+				'system.load_average'            => array(
+					'unit'   => 'load',
+					'status' => 'unavailable',
+				),
+				'system.disk_free_space'         => array(
+					'unit'   => 'bytes',
+					'status' => 'available',
+				),
+				'system.disk_total_space'        => array(
+					'unit'   => 'bytes',
+					'status' => 'available',
+				),
+				'system.php_extensions'          => array(
+					'unit'   => 'json',
+					'status' => 'available',
+				),
+				'cache.persistent_object_cache'  => array(
+					'unit'   => 'boolean',
+					'status' => 'available',
+				),
+				'cache.redis_available'          => array(
+					'unit'   => 'boolean',
+					'status' => 'unavailable',
+				),
+				'cache.memcached_available'      => array(
+					'unit'   => 'boolean',
+					'status' => 'unavailable',
+				),
+				'database.query_count'           => array(
+					'unit'   => 'count',
+					'status' => 'unavailable',
+				),
+				'database.query_time_total'      => array(
+					'unit'   => 'seconds',
+					'status' => 'unavailable',
+				),
+				'database.slow_query_count'      => array(
+					'unit'   => 'count',
+					'status' => 'unavailable',
+				),
+				'database.savequeries_enabled'   => array(
+					'unit'   => 'boolean',
+					'status' => 'available',
+				),
+				'performance.profiling_mode'     => array(
+					'unit'   => 'string',
+					'status' => 'available',
+				),
+				'performance.request_context'    => array(
+					'unit'   => 'string',
 					'status' => 'available',
 				),
 			),

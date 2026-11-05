@@ -84,16 +84,32 @@ final class Metric {
 	public array $metadata;
 
 	/**
+	 * Measurement context (frontend, admin, rest, ajax, cron).
+	 *
+	 * @var string
+	 */
+	public string $measurement_context;
+
+	/**
+	 * Page URL where the measurement was taken (for frontend context).
+	 *
+	 * @var string
+	 */
+	public string $page_url;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param string $metric         Metric identifier (e.g. php.memory_limit).
-	 * @param mixed  $value          Metric value.
-	 * @param string $unit           Unit of measurement (e.g. bytes, seconds).
-	 * @param string $category       Metric category.
-	 * @param string $status         Availability status.
-	 * @param string $source         Data source (collector name).
-	 * @param string $collected_at   ISO 8601 timestamp.
-	 * @param array  $metadata       Optional additional metadata.
+	 * @param string $metric           Metric identifier (e.g. php.memory_limit).
+	 * @param mixed  $value            Metric value.
+	 * @param string $unit             Unit of measurement (e.g. bytes, seconds).
+	 * @param string $category         Metric category.
+	 * @param string $status           Availability status.
+	 * @param string $source           Data source (collector name).
+	 * @param string $collected_at     ISO 8601 timestamp.
+	 * @param array  $metadata         Optional additional metadata.
+	 * @param string $measurement_context Measurement context (frontend, admin, rest, ajax, cron).
+	 * @param string $page_url         Page URL where measurement was taken (frontend context).
 	 */
 	public function __construct(
 		string $metric,
@@ -103,16 +119,20 @@ final class Metric {
 		string $status = self::STATUS_AVAILABLE,
 		string $source = '',
 		string $collected_at = '',
-		array $metadata = array()
+		array $metadata = array(),
+		string $measurement_context = '',
+		string $page_url = ''
 	) {
-		$this->metric       = $metric;
-		$this->value        = $value;
-		$this->unit         = $unit;
-		$this->category     = $category;
-		$this->status       = $status;
-		$this->source       = $source;
-		$this->collected_at = '' !== $collected_at ? $collected_at : gmdate( 'Y-m-d H:i:s' );
-		$this->metadata     = $metadata;
+		$this->metric              = $metric;
+		$this->value               = $value;
+		$this->unit                = $unit;
+		$this->category            = $category;
+		$this->status              = $status;
+		$this->source              = $source;
+		$this->collected_at        = '' !== $collected_at ? $collected_at : gmdate( 'Y-m-d H:i:s' );
+		$this->metadata            = $metadata;
+		$this->measurement_context = $measurement_context;
+		$this->page_url            = $page_url;
 	}
 
 	/**
@@ -126,19 +146,23 @@ final class Metric {
 	 *     status: string,
 	 *     source: string,
 	 *     collected_at: string,
-	 *     metadata: array
+	 *     metadata: array,
+	 *     measurement_context: string,
+	 *     page_url: string
 	 * }
 	 */
 	public function to_array(): array {
 		return array(
-			'metric'       => $this->metric,
-			'value'        => $this->value,
-			'unit'         => $this->unit,
-			'category'     => $this->category,
-			'status'       => $this->status,
-			'source'       => $this->source,
-			'collected_at' => $this->collected_at,
-			'metadata'     => $this->metadata,
+			'metric'               => $this->metric,
+			'value'                => $this->value,
+			'unit'                 => $this->unit,
+			'category'             => $this->category,
+			'status'               => $this->status,
+			'source'               => $this->source,
+			'collected_at'         => $this->collected_at,
+			'metadata'             => $this->metadata,
+			'measurement_context'  => $this->measurement_context,
+			'page_url'             => $this->page_url,
 		);
 	}
 
