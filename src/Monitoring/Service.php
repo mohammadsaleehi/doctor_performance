@@ -219,11 +219,16 @@ final class Service {
 			new FrontendCollector(),
 		);
 
-		$all_metrics = array();
+		$all_metrics     = array();
+		$profile_mode    = \in_array( $trigger_type, array( 'manual', 'on_demand' ), true )
+			? PerformanceCollector::MODE_ON_DEMAND
+			: PerformanceCollector::MODE_PASSIVE;
 
 		foreach ( $collectors as $collector ) {
 			try {
-				$raw_data   = $collector->collect();
+				$raw_data   = $collector instanceof PerformanceCollector
+					? $collector->collect( $profile_mode )
+					: $collector->collect();
 				$normalizer = new Normalizer( $collector->get_id(), $collected_at );
 
 				// Build schema based on collector type.
@@ -532,15 +537,15 @@ final class Service {
 				),
 				'database.query_count'           => array(
 					'unit'   => 'count',
-					'status' => 'unavailable',
+					'status' => 'available',
 				),
 				'database.query_time_total'      => array(
 					'unit'   => 'seconds',
-					'status' => 'unavailable',
+					'status' => 'available',
 				),
 				'database.slow_query_count'      => array(
 					'unit'   => 'count',
-					'status' => 'unavailable',
+					'status' => 'available',
 				),
 				'database.savequeries_enabled'   => array(
 					'unit'   => 'boolean',

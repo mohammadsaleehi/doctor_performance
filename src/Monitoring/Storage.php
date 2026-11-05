@@ -1325,6 +1325,62 @@ final class Storage {
 	}
 
 	/**
+	 * Get stored metric counts for multiple snapshots in a single query.
+	 *
+	 * Used by the performance page so session rows display the number of
+	 * metrics actually stored against their snapshot (including browser
+	 * metrics submitted after the server profile completed).
+	 *
+	 * @param int[] $snapshot_ids Snapshot IDs.
+	 * @return array<int, int> Metric counts keyed by snapshot ID.
+	 */
+	public function get_snapshot_metric_counts( array $snapshot_ids ): array {
+		global $wpdb;
+
+		$metrics_table = $wpdb->prefix . 'wpd_monitoring_metrics';
+		if ( ! preg_match( '/^[a-z0-9_]+$/', $metrics_table ) ) {
+			return array();
+		}
+
+		$ids = array_values( array_unique( array_filter( array_map( 'intval', $snapshot_ids ) ) ) );
+		if ( empty( $ids ) ) {
+			return array();
+		}
+
+		$placeholders = implode( ', ', array_fill( 0, count( $ids ), '%d' ) );
+		$prefixed     = $wpdb->esc_like( 'performance.' ) . '%';
+
+		// Count unique logical identifiers, collapsing the legacy
+		// `performance.`-prefixed duplicates so session counts agree with the
+		// canonical measurement count shown in the dashboard.
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- table validated via preg_match above; placeholders are %d/%s.
+		$sql = $wpdb->prepare(
+			'SELECT snapshot_id,
+				COUNT(DISTINCT CASE
+					WHEN metric_identifier LIKE %s
+					THEN SUBSTRING(metric_identifier FROM 13)
+					ELSE metric_identifier
+				END) AS metric_count
+			FROM ' . $metrics_table . '
+			WHERE snapshot_id IN (' . $placeholders . ')
+			GROUP BY snapshot_id',
+			$prefixed,
+			...$ids
+		);
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql prepared on previous line.
+		$rows   = $wpdb->get_results( $sql, ARRAY_A );
+		$counts = array();
+		if ( $rows ) {
+			foreach ( $rows as $row ) {
+				$counts[ (int) $row['snapshot_id'] ] = (int) $row['metric_count'];
+			}
+		}
+
+		return $counts;
+	}
+
+	/**
 	 * Get a single profiling session by ID.
 	 *
 	 * @param int $session_id Session ID.

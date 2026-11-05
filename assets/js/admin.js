@@ -902,6 +902,7 @@
 			perfRestUrl = perfCfg.restUrl || perfRestUrl;
 			perfNonce   = perfCfg.nonce || perfNonce;
 			wpRestNonce = perfCfg.wpRestNonce || wpRestNonce;
+			perfStrings = perfCfg.strings || perfStrings;
 		} catch ( e ) {}
 	}
 
@@ -929,7 +930,11 @@
 			labelEl = runProfileLabel;
 		}
 
-		setButtonLoading( activeBtn, labelEl, true, perfStrings, perfStrings );
+		var runStrings = {
+			loading: perfStrings.profiling || 'Profiling…',
+			label: perfStrings.runProfile || 'Run Profile'
+		};
+		setButtonLoading( activeBtn, labelEl, true, runStrings, runStrings );
 		showNotice( perfNotice, perfStrings.profiling || 'Profiling…', 'info' );
 
 		wpdFetch( perfRestUrl, 'POST', null, perfNonce )
@@ -942,7 +947,7 @@
 				return response.json();
 			} )
 			.then( function ( data ) {
-				setButtonLoading( activeBtn, labelEl, false, perfStrings, perfStrings );
+				setButtonLoading( activeBtn, labelEl, false, runStrings, runStrings );
 				profileInFlight = false;
 				var successMsg = perfStrings.complete || 'Profile complete.';
 				if ( data && data.snapshot_id ) {
@@ -952,17 +957,22 @@
 				setTimeout( function () { window.location.reload(); }, 800 );
 			} )
 			.catch( function ( err ) {
-				setButtonLoading( activeBtn, labelEl, false, perfStrings, perfStrings );
+				setButtonLoading( activeBtn, labelEl, false, runStrings, runStrings );
 				profileInFlight = false;
 				showNotice( perfNotice, err.message || perfStrings.error || 'Profiling failed.', 'error' );
 			} );
 	}
 
-	[ runProfileBtn, runProfileServer ].forEach( function ( b ) {
-		if ( b ) {
-			b.addEventListener( 'click', function () {
-				runProfile( b );
-			} );
+	// Delegated click handler for profile buttons. Using event delegation from
+	// the document ensures clicks are caught even when synthetic/dispatched
+	// events do not propagate through individual addEventListener handlers
+	// (e.g. some browser automation tools), while native user clicks continue
+	// to work through both paths. Direct listeners are intentionally omitted
+	// to avoid duplicate firings.
+	document.addEventListener( 'click', function ( event ) {
+		var btn = event.target.closest( '#wpd-run-profile, #wpd-run-server-profile' );
+		if ( btn ) {
+			runProfile( btn );
 		}
 	} );
 
@@ -1038,7 +1048,7 @@
 	var perfStartBtnEmpty = document.getElementById( 'wpd-run-frontend-profile-empty' );
 	var perfStartLabel  = document.getElementById( 'wpd-run-frontend-profile-label' );
 	var perfStartLabelEmpty = document.getElementById( 'wpd-run-frontend-profile-label-empty' );
-	var perfNotice      = document.getElementById( 'wpd-frontend-profile-notice' );
+	var frontendNotice  = document.getElementById( 'wpd-frontend-profile-notice' );
 	var perfBrowserUrl  = performance && performance.restBrowserUrl ? performance.restBrowserUrl : '';
 	var perfBrowserNonce = performance && performance.browserNonce ? performance.browserNonce : '';
 
@@ -1557,14 +1567,18 @@
 		var context     = contextEl ? contextEl.value : 'admin';
 
 		if ( ! sessionId ) {
-			showNotice( perfNotice, perfStrings.noSession || 'No active profiling session. Run a profile first.', 'error' );
+			showNotice( frontendNotice, perfStrings.noSession || 'No active profiling session. Run a profile first.', 'error' );
 			return;
 		}
 
 		frontendInFlight = true;
 		var labelEl = btn ? btn.querySelector( '.wpd-button-label' ) : ( perfStartLabel || perfStartLabelEmpty );
-		setButtonLoading( btn || perfStartBtn || perfStartBtnEmpty, labelEl, true, {}, {} );
-		showNotice( perfNotice, perfStrings.collecting || 'Collecting browser metrics…', 'info' );
+		var browserStrings = {
+			loading: perfStrings.collecting || 'Collecting browser metrics…',
+			label: perfStrings.collectBrowser || 'Collect Browser Metrics'
+		};
+		setButtonLoading( btn || perfStartBtn || perfStartBtnEmpty, labelEl, true, browserStrings, browserStrings );
+		showNotice( frontendNotice, perfStrings.collecting || 'Collecting browser metrics…', 'info' );
 
 		collectAllBrowserMetrics()
 			.then( function ( metrics ) {
@@ -1574,8 +1588,9 @@
 				// Tag every metric with the measured page URL and context so
 				// results are never presented without identifying what was
 				// measured.
+				var measuredPageUrl = 'admin' === context ? window.location.href : targetUrl;
 				Object.keys( metrics ).forEach( function ( key ) {
-					metrics[ key ].page_url      = targetUrl;
+					metrics[ key ].page_url      = measuredPageUrl;
 					metrics[ key ].measurement_context = context;
 				} );
 				return submitBrowserMetrics( metrics, sessionId, snapshotId );
@@ -1589,25 +1604,98 @@
 				return response.json();
 			} )
 			.then( function ( data ) {
-				setButtonLoading( btn || perfStartBtn || perfStartBtnEmpty, labelEl, false, {}, {} );
+				setButtonLoading( btn || perfStartBtn || perfStartBtnEmpty, labelEl, false, browserStrings, browserStrings );
 				frontendInFlight = false;
 				var msg = 'Browser metrics submitted (' + ( data.stored || 0 ) + ' metrics).';
-				showNotice( perfNotice, perfStrings.browserStored || msg, 'success' );
+				showNotice( frontendNotice, perfStrings.browserStored || msg, 'success' );
 				setTimeout( function () { window.location.reload(); }, 800 );
 			} )
 			.catch( function ( err ) {
-				setButtonLoading( btn || perfStartBtn || perfStartBtnEmpty, labelEl, false, {}, {} );
+				setButtonLoading( btn || perfStartBtn || perfStartBtnEmpty, labelEl, false, browserStrings, browserStrings );
 				frontendInFlight = false;
-				showNotice( perfNotice, err.message || 'Browser profiling failed.', 'error' );
+				showNotice( frontendNotice, err.message || 'Browser profiling failed.', 'error' );
 			} );
 	}
 
-	[ perfStartBtn, perfStartBtnEmpty ].forEach( function ( b ) {
-		if ( b ) {
-			b.addEventListener( 'click', function () {
-				runFrontendProfile( b );
-			} );
+	// Delegated click handler for browser metrics buttons, same rationale as
+	// the profile buttons above.
+	document.addEventListener( 'click', function ( event ) {
+		var btn = event.target.closest( '#wpd-run-frontend-profile, #wpd-run-frontend-profile-empty' );
+		if ( btn ) {
+			runFrontendProfile( btn );
 		}
+	} );
+
+	// --- Comparison filters ---
+
+	var compareTable = document.getElementById( 'wpd-comp-table' );
+	if ( compareTable ) {
+		var compareRows    = Array.prototype.slice.call( compareTable.querySelectorAll( 'tbody tr.wpd-compare-row' ) );
+		var compareSearch  = document.getElementById( 'wpd-comp-search' );
+		var compareCat     = document.getElementById( 'wpd-comp-category' );
+		var compareChanges = document.getElementById( 'wpd-comp-changes-only' );
+		var compareCount   = document.getElementById( 'wpd-comp-count' );
+		var compareEmpty   = document.getElementById( 'wpd-comp-empty' );
+
+		var applyCompareFilters = function () {
+			var query      = compareSearch ? compareSearch.value.trim().toLowerCase() : '';
+			var category   = compareCat ? compareCat.value : '';
+			var changesOnly = compareChanges ? compareChanges.checked : false;
+			var visible    = 0;
+
+			compareRows.forEach( function ( row ) {
+				var searchText = row.getAttribute( 'data-search' ) || '';
+				var rowCat     = row.getAttribute( 'data-category' ) || '';
+				var isChange   = '1' === row.getAttribute( 'data-change' );
+				var matches    = ( ! query || searchText.indexOf( query ) !== -1 )
+					&& ( ! category || rowCat === category )
+					&& ( ! changesOnly || isChange );
+				row.hidden = ! matches;
+				if ( matches ) {
+					visible++;
+				}
+			} );
+
+			if ( compareCount ) {
+				compareCount.textContent = ( perfStrings.showing || 'Showing %1$d of %2$d' )
+					.replace( '%1$d', visible )
+					.replace( '%2$d', compareRows.length );
+			}
+			if ( compareEmpty ) {
+				compareEmpty.hidden = visible !== 0;
+			}
+		};
+
+		if ( compareSearch ) {
+			compareSearch.addEventListener( 'input', applyCompareFilters );
+		}
+		if ( compareCat ) {
+			compareCat.addEventListener( 'change', applyCompareFilters );
+		}
+		if ( compareChanges ) {
+			compareChanges.addEventListener( 'change', applyCompareFilters );
+		}
+		applyCompareFilters();
+	}
+
+	// --- Session detail rows ---
+
+	document.addEventListener( 'click', function ( event ) {
+		var toggle = event.target.closest( '.wpd-session-toggle' );
+		if ( ! toggle ) {
+			return;
+		}
+		var targetId = toggle.getAttribute( 'data-target' );
+		var details  = targetId ? document.getElementById( targetId ) : null;
+		if ( ! details ) {
+			return;
+		}
+		var isOpen = 'true' === toggle.getAttribute( 'aria-expanded' );
+		toggle.setAttribute( 'aria-expanded', isOpen ? 'false' : 'true' );
+		toggle.textContent = isOpen
+			? ( perfStrings.details || 'Details' )
+			: ( perfStrings.hide || 'Hide' );
+		details.hidden = isOpen;
 	} );
 
 } )();
